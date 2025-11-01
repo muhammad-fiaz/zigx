@@ -85,36 +85,36 @@ fib_10 = myproject.fibonacci(10)  # Returns 55
 
 <div class="grid cards" markdown>
 
--   :material-rocket-launch:{ .lg .middle } **Getting Started**
+-   🚀 **Getting Started**
 
     ---
 
     Install ZigX and create your first project
 
-    [:octicons-arrow-right-24: Installation](getting-started/installation.md)
+    [→ Installation](getting-started/installation.md)
 
--   :material-book-open-variant:{ .lg .middle } **User Guide**
+-   📖 **User Guide**
 
     ---
 
     Learn how to write Zig code and build Python extensions
 
-    [:octicons-arrow-right-24: User Guide](guide/writing-zig.md)
+    [→ User Guide](guide/writing-zig.md)
 
--   :material-code-tags:{ .lg .middle } **Examples**
+-   💻 **Examples**
 
     ---
 
     Explore example projects and use cases
 
-    [:octicons-arrow-right-24: Examples](examples/basic.md)
+    [→ Examples](examples/basic.md)
 
--   :material-api:{ .lg .middle } **Reference**
+-   🔧 **Reference**
 
     ---
 
     CLI commands, configuration, and API reference
 
-    [:octicons-arrow-right-24: Reference](reference/cli.md)
+    [→ Reference](reference/cli.md)
 
 </div>
