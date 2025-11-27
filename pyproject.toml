@@ -27,7 +27,8 @@ classifiers = [
     "Topic :: Software Development :: Code Generators",
     "Typing :: Typed",
 ]
-dependencies = []
+dependencies = [
+]
 
 [project.optional-dependencies]
 dev = [
@@ -53,11 +54,17 @@ Changelog = "https://github.com/muhammad-fiaz/zigx/blob/main/CHANGELOG.md"
 zigx = "zigx:main"
 
 [build-system]
-requires = ["uv_build>=0.9.13,<0.10"]
-build-backend = "uv_build"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
-[tool.uv.build-backend]
-module-root = ""
+[tool.hatch.build.hooks.custom]
+path = "zigx/build.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["zigx"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"zigx/zig-out/bin/*" = "zigx/bin/"
 
 [tool.ruff]
 target-version = "py38"
@@ -72,3 +79,6 @@ python_version = "3.9"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
+
+[tool.uv]
+trusted-publishing = "always"

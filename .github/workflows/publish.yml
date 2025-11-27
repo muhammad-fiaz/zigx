@@ -5,17 +5,205 @@ on:
     types: [published]
   workflow_dispatch:
 
+permissions:
+  contents: write
+  id-token: write
+
 jobs:
-  publish:
-    runs-on: ubuntu-latest
+  build-wheels:
+    name: Build wheels on ${{ matrix.os }} for Python ${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
+        include:
+          # Linux x86_64 - all Python versions
+          - os: ubuntu-latest
+            arch: x86_64
+          # Linux aarch64 - all Python versions
+          - os: ubuntu-latest
+            arch: aarch64
+          # macOS Intel - all Python versions
+          - os: macos-13
+            arch: x86_64
+          # macOS Apple Silicon - all Python versions
+          - os: macos-14
+            arch: arm64
+          # Windows - all Python versions
+          - os: windows-latest
+            arch: x86_64
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Setup Zig
+        uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: 0.14.0
+
       - name: Setup uv
         uses: astral-sh/setup-uv@v3
         with:
           version: "latest"
-      - name: Build package
+
+      - name: Setup QEMU (for ARM on Linux)
+        if: runner.os == 'Linux' && matrix.arch == 'aarch64'
+        uses: docker/setup-qemu-action@v3
+
+      - name: Build wheel
         run: uv build
+
+      - name: Upload wheel
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.os }}-${{ matrix.arch }}-py${{ matrix.python-version }}
+          path: |
+            dist/*.whl
+            dist/*.tar.gz
+          if-no-files-found: error
+
+  publish:
+    needs: build-wheels
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+
+      - name: Download all wheels
+        uses: actions/download-artifact@v4
+        with:
+          pattern: dist-*
+          path: dist
+          merge-multiple: true
+
+      - name: Get version
+        id: get_version
+        run: |
+          VERSION=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create platform download table
+        run: |
+          echo "## 📦 Platform Downloads" > platform_table.md
+          echo "" >> platform_table.md
+          echo "| Platform | Architecture | Python Version | Download |" >> platform_table.md
+          echo "|----------|--------------|----------------|----------|" >> platform_table.md
+
+          for file in dist/*.whl; do
+            if [[ $file =~ zigx-([0-9]+\.[0-9]+\.[0-9]+)-cp([0-9]+)-cp([0-9]+)-(.+)\.whl ]]; then
+              version="${BASH_REMATCH[1]}"
+              py_version="${BASH_REMATCH[2]}"
+              platform="${BASH_REMATCH[4]}"
+
+              # Convert platform codes to readable names
+              case $platform in
+                "linux_x86_64") readable_platform="Linux" readable_arch="x86_64" ;;
+                "linux_aarch64") readable_platform="Linux" readable_arch="ARM64" ;;
+                "macosx_10_13_x86_64"|"macosx_11_0_x86_64") readable_platform="macOS" readable_arch="Intel" ;;
+                "macosx_11_0_arm64") readable_platform="macOS" readable_arch="Apple Silicon" ;;
+                "win_amd64") readable_platform="Windows" readable_arch="x86_64" ;;
+                *) readable_platform="$platform" readable_arch="Unknown" ;;
+              esac
+
+              # Convert Python version number to readable version
+              case $py_version in
+                "38") py_readable="3.8" ;;
+                "39") py_readable="3.9" ;;
+                "310") py_readable="3.10" ;;
+                "311") py_readable="3.11" ;;
+                "312") py_readable="3.12" ;;
+                "313") py_readable="3.13" ;;
+                "314") py_readable="3.14" ;;
+                *) py_readable="$py_version" ;;
+              esac
+
+              filename=$(basename "$file")
+              echo "| $readable_platform | $readable_arch | $py_readable | [\`$filename\`](https://github.com/${{ github.repository }}/releases/download/${{ github.event.release.tag_name }}/$filename) |" >> platform_table.md
+            fi
+          done
+
+          echo "" >> platform_table.md
+          cat platform_table.md
+
+      - name: Upload artifacts to release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          body_path: platform_table.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+
       - name: Publish to PyPI
-        run: uv publish --trusted-publishing=always
+        run: uv publish
+
+      - name: Update release notes
+        if: github.event_name == 'release'
+        run: |
+          # Create enhanced release notes
+          cat << EOF > temp_notes.md
+          # ZigX v${{ steps.get_version.outputs.version }} Release Notes
+
+          ## 🚀 Release
+
+          Welcome to ZigX v${{ steps.get_version.outputs.version }}, a high-performance Python extension that seamlessly integrates Zig's native performance with Python's ease of use!
+
+          ### ✨ Key Features
+
+          - **Direct Zig Integration**: Compile Zig code into native Python extensions without intermediate C bindings
+          - **Automatic GIL Management**: Smart GIL release during native calls for true parallel execution
+          - **Cross-Platform Support**: Works on Windows, macOS, and Linux
+          - **PEP 517 Build System**: Modern Python packaging with Hatchling backend
+          - **Type Safety**: Full mypy support with comprehensive type annotations
+
+          ### 📦 Installation
+
+          \`\`\`bash
+          pip install zigx
+          # or
+          uv pip install zigx
+          \`\`\`
+
+          ### 🔗 Links
+
+          - 📚 [Documentation](https://muhammad-fiaz.github.io/zigx)
+          - 🐛 [Issues](${{ github.server_url }}/${{ github.repository }}/issues)
+          - 💻 [Source](${{ github.server_url }}/${{ github.repository }})
+
+          ### 📦 Platform Support
+
+          This release includes pre-built wheels for:
+          - Linux (x86_64, aarch64)
+          - macOS (x86_64 Intel, arm64 Apple Silicon)
+          - Windows (x86_64)
+
+          All wheels support Python versions 3.8 through 3.14.
+
+          ---
+
+          ✅ **Successfully published to PyPI!**
+          EOF
+          ENHANCED_NOTES=$(cat temp_notes.md)
+          rm temp_notes.md
+
+          # Use GitHub CLI to update release
+          gh release edit ${{ github.event.release.tag_name }} \
+            --notes "$ENHANCED_NOTES" \
+            --repo ${{ github.repository }}
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}

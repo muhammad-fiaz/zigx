@@ -21,15 +21,18 @@ ZigX makes it easy to create Python extensions using Zig, providing automatic ct
 ## Features
 
 - 🚀 **Pure Zig Implementation** - No Python build dependencies beyond standard library
-- 📦 **Wheel Building** - Create platform-specific wheels with proper metadata
+- 📦 **Bootstrapped Wheels** - Pre-compiled binaries bundled for all platforms
 - 🔧 **Development Mode** - Hot-reload friendly `develop` command
 - 📝 **Type Stubs** - Automatic `.pyi` file generation for IDE support
 - 🔒 **GIL-Safe** - Automatic GIL release for ctypes calls (just like maturin/pyo3)
-- 🌐 **Cross-Platform** - Supports Linux, Windows, and macOS
+- 🌐 **Cross-Platform** - Supports Linux (x86_64, aarch64), Windows (x86_64), and macOS (x86_64, arm64)
 - 🎯 **Automatic Export Detection** - No configuration needed, exports are detected from Zig source
-- ⚡ **uv Integration** - Works seamlessly as a PEP 517 build backend
+- ⚡ **uv Integration** - Works seamlessly with modern Python tooling
+- 💪 **No Zig Required** - Install and use without needing Zig compiler (binaries pre-built)
 
 ## Installation
+
+### From PyPI (Recommended)
 
 ```bash
 pip install zigx
@@ -41,7 +44,25 @@ Or with uv (recommended):
 uv pip install zigx
 ```
 
-## Quick Start
+**No Zig installation required!** ZigX wheels include pre-compiled binaries for your platform.
+
+### From Source (Requires Zig 0.14.0+)
+
+```bash
+git clone https://github.com/muhammad-fiaz/zigx.git
+cd zigx
+uv pip install -e .
+```
+
+## Documentation
+
+📚 **Full documentation is available at [muhammad-fiaz.github.io/zigx](https://muhammad-fiaz.github.io/zigx)**
+
+The documentation includes:
+- Getting started guide
+- API reference
+- Examples and tutorials
+- Troubleshooting guide
 
 ### Create a New Project
 
@@ -201,9 +222,30 @@ pub export fn heavy_computation(data: [*]f64, len: usize) f64 {
 
 ## Requirements
 
-- **Zig** 0.14.0 or later (0.15.0+ recommended)
-- **Python** 3.8 or later
-- **uv** (recommended) or pip
+### System Requirements
+
+- **Operating System**: Linux, macOS, or Windows
+- **Architecture**: x86_64, ARM64
+
+### Software Requirements
+
+- **Zig Compiler**: 0.14.0 or later (0.15.0+ recommended)
+  - Download from: https://ziglang.org/download/
+- **Python**: 3.8 or later
+- **Build Tool**: uv (recommended) or pip or hatchling or poetry
+
+### Optional Dependencies
+
+For development:
+- pytest (testing)
+- ruff (linting)
+- mypy (type checking)
+- mkdocs (documentation)
+- hatchling (build backend)
+
+For documentation building:
+- mkdocs-material
+- mkdocstrings[python]
 
 ## Documentation
 

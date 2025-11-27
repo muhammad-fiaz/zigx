@@ -31,7 +31,12 @@ def find_zigx_binary() -> Optional[Path]:
     # Check if running from source
     pkg_dir = Path(__file__).parent
 
-    # Look for zig-out directory (built binary)
+    # Look in installed bin directory (from wheel)
+    bin_dir = pkg_dir / "bin" / get_binary_name()
+    if bin_dir.exists():
+        return bin_dir
+
+    # Look for zig-out directory (built binary, development mode)
     zig_out = pkg_dir / "zig-out" / "bin" / get_binary_name()
     if zig_out.exists():
         return zig_out
@@ -41,9 +46,9 @@ def find_zigx_binary() -> Optional[Path]:
     if parent_zig_out.exists():
         return parent_zig_out
 
-    # Look in installed location
-    bin_dir = Path(sys.prefix) / "bin"
-    installed = bin_dir / get_binary_name()
+    # Look in system bin directory
+    sys_bin_dir = Path(sys.prefix) / "bin"
+    installed = sys_bin_dir / get_binary_name()
     if installed.exists():
         return installed
 
