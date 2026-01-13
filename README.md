@@ -208,7 +208,7 @@ See [SECURITY.md](SECURITY.md).
 
 ## License
 
-MIT License - see [LICENSE](LICENSE).
+this project is licensed under the Apache License 2.0 - see [LICENSE](LICENSE).
 
 ## Changelog
 
