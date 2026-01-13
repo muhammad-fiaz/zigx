@@ -15,7 +15,7 @@
 <a href="https://github.com/sponsors/muhammad-fiaz"><img src="https://img.shields.io/badge/Sponsor-pink?style=social&logo=github" alt="GitHub Sponsors"></a>
 <a href="https://hits.sh/muhammad-fiaz/zigx/"><img src="https://hits.sh/muhammad-fiaz/zigx.svg?label=Visitors&extraCount=0&color=green" alt="Repo Visitors"></a>
 
-<p><em>Fast and smaller compression file format for Zig.</em></p>
+<p><em>Fast and light-weight compression file format for Zig.</em></p>
 
 <b><a href="https://muhammad-fiaz.github.io/zigx/">Documentation</a> |
 <a href="https://muhammad-fiaz.github.io/zigx/api/">API Reference</a> |
@@ -29,7 +29,7 @@ Fast and smaller compression file format for Zig features LZ77+RLE hybrid compre
 > [!NOTE]
 > ZIGX introduces a new archive format (.zigx) designed specifically for Zig projects. As a new format, it is not yet widely adopted, but offers modern features like versioned format, SHA-256 checksums, and excellent compression ratios.
 
-**If you find `zigx` useful, please give it a star!**
+⭐ **If you find `zigx` useful, please give it a star!**
 
 ## Features
 

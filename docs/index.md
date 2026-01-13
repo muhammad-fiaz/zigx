@@ -1,11 +1,11 @@
 ---
 layout: home
-title: ZIGX - Fast and Smaller Compression for Zig
+title: ZIGX - Fast and light-weight Compression for Zig
 titleTemplate: ZIGX
 
 hero:
   name: "ZIGX"
-  text: "Fast and Smaller Compression"
+  text: "Fast and light-weight Compression"
   tagline: Fast and smaller compression file format for Zig
   image:
     src: /zigx.png
@@ -89,4 +89,4 @@ ZIGX provides intuitive function aliases:
 - **Library**: 0.0.1
 - **Format**: v1
 - **Compression**: v1
-- **Zig**: 0.14.0+ (0.15.x recommended)
+- **Zig**: 0.15.0+

@@ -4,7 +4,7 @@ import llmstxt from 'vitepress-plugin-llms';
 // Site configuration
 const SITE_URL = 'https://muhammad-fiaz.github.io/zigx';
 const SITE_TITLE = 'ZIGX';
-const SITE_DESCRIPTION = 'Fast and smaller compression file format for Zig';
+const SITE_DESCRIPTION = 'Fast and light-weight compression file format for Zig';
 
 // Google Analytics and Google Tag Manager IDs
 export const GA_ID = 'G-6BVYCRK57P';

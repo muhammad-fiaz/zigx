@@ -94,7 +94,6 @@ jobs:
           - powerpc-freestanding
           - powerpc64-freestanding
           - sparc64-freestanding
-          - wasm32-freestanding
     steps:
       - name: Checkout
         uses: actions/checkout@v4
