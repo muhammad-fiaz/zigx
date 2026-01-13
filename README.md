@@ -42,14 +42,6 @@ Fast and smaller compression file format for Zig features LZ77+RLE hybrid compre
 - **Pure Zig** - Zero external dependencies
 - **128-byte Header** - Compact binary format
 
-## Version
-
-| Component | Version |
-|-----------|---------|
-| Library | 0.0.1 |
-| Format | 1 |
-| Compression | 1 |
-
 ## Installation
 
 Add to `build.zig.zon`:
@@ -205,6 +197,15 @@ See [CONTRIBUTING.md](docs/contributing.md).
 ## Security
 
 See [SECURITY.md](SECURITY.md).
+
+
+## Version
+
+| Component | Version |
+|-----------|---------|
+| Library | 0.0.1 |
+| Format | 1 |
+| Compression | 1 |
 
 ## License
 
