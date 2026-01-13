@@ -68,17 +68,33 @@ jobs:
       fail-fast: false
       matrix:
         target:
+          # Linux targets
           - x86_64-linux
           - x86-linux
           - aarch64-linux
+          - arm-linux
+          - riscv64-linux
+          # macOS targets
           - x86_64-macos
           - aarch64-macos
+          # Windows targets
           - x86_64-windows
           - x86-windows
+          - aarch64-windows
+          # Freestanding targets (embedded/baremetal)
           - x86_64-freestanding
+          - x86-freestanding
           - aarch64-freestanding
-          - riscv64-freestanding
           - arm-freestanding
+          - riscv64-freestanding
+          - riscv32-freestanding
+          - thumb-freestanding
+          - mips-freestanding
+          - mips64-freestanding
+          - powerpc-freestanding
+          - powerpc64-freestanding
+          - sparc64-freestanding
+          - wasm32-freestanding
     steps:
       - name: Checkout
         uses: actions/checkout@v4

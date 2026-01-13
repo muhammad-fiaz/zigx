@@ -1,12 +1,12 @@
 ---
 layout: home
-title: ZIGX - High-Performance Compression for Zig
+title: ZIGX - Fast and Smaller Compression for Zig
 titleTemplate: ZIGX
 
 hero:
   name: "ZIGX"
-  text: "High-Performance Compression"
-  tagline: LZ77+RLE hybrid compression library for Zig with 64KB sliding window and lazy matching
+  text: "Fast and Smaller Compression"
+  tagline: Fast and smaller compression file format for Zig
   image:
     src: /zigx.png
     alt: ZIGX Logo

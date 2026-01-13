@@ -477,8 +477,9 @@ fn collectFile(
         return CompressError.FileSystemError;
     };
     defer dir.close();
-    // Support large files - increased limit to 16GB
-    const content = dir.readFileAlloc(allocator, relative_path, 16 * 1024 * 1024 * 1024) catch |err| {
+    // Support large files - use platform-appropriate max (2GB on 32-bit, 4GB on 64-bit)
+    const max_file_size: usize = if (@sizeOf(usize) >= 8) 4 * 1024 * 1024 * 1024 else 2 * 1024 * 1024 * 1024;
+    const content = dir.readFileAlloc(allocator, relative_path, max_file_size) catch |err| {
         return switch (err) {
             error.FileNotFound => CompressError.FileNotFound,
             error.OutOfMemory => CompressError.OutOfMemory,
@@ -537,8 +538,9 @@ fn collectDirectoryWithExcludes(
         if (matchesExcludePattern(entry.path, exclude_patterns)) continue;
 
         security.validatePath(relative) catch return CompressError.SecurityViolation;
-        // Support large files - increased limit to 16GB
-        const content = dir.readFileAlloc(allocator, entry.path, 16 * 1024 * 1024 * 1024) catch |err| {
+        // Support large files - use platform-appropriate max (2GB on 32-bit, 4GB on 64-bit)
+        const dir_max_file_size: usize = if (@sizeOf(usize) >= 8) 4 * 1024 * 1024 * 1024 else 2 * 1024 * 1024 * 1024;
+        const content = dir.readFileAlloc(allocator, entry.path, dir_max_file_size) catch |err| {
             return switch (err) {
                 error.OutOfMemory => CompressError.OutOfMemory,
                 else => CompressError.IoError,

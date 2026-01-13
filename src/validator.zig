@@ -68,13 +68,17 @@ pub fn validateDetailed(path: []const u8, allocator: Allocator) ValidationError!
     const payload_offset = archive.getPayloadOffset();
     archive.file.seekTo(payload_offset) catch return ValidationError.IoError;
 
-    const compressed_payload = allocator.alloc(u8, archive.header.payload_length) catch {
+    // Safely convert u64 to usize for 32-bit platforms
+    const val_payload_len: usize = std.math.cast(usize, archive.header.payload_length) orelse {
+        return ValidationError.OutOfMemory;
+    };
+    const compressed_payload = allocator.alloc(u8, val_payload_len) catch {
         return ValidationError.OutOfMemory;
     };
     defer allocator.free(compressed_payload);
 
     const bytes_read = archive.file.readAll(compressed_payload) catch return ValidationError.IoError;
-    if (bytes_read < archive.header.payload_length) return ValidationError.UnexpectedEof;
+    if (bytes_read < val_payload_len) return ValidationError.UnexpectedEof;
 
     const actual_payload_hash = hash.hashBytes(compressed_payload);
     const payload_hash_valid = std.mem.eql(u8, &actual_payload_hash, &archive.header.payload_hash);
@@ -202,13 +206,17 @@ pub fn validateQuick(path: []const u8, allocator: Allocator) ValidationError!boo
     const payload_offset = archive.getPayloadOffset();
     archive.file.seekTo(payload_offset) catch return ValidationError.IoError;
 
-    const compressed_payload = allocator.alloc(u8, archive.header.payload_length) catch {
+    // Safely convert u64 to usize for 32-bit platforms
+    const vp_payload_len: usize = std.math.cast(usize, archive.header.payload_length) orelse {
+        return ValidationError.OutOfMemory;
+    };
+    const compressed_payload = allocator.alloc(u8, vp_payload_len) catch {
         return ValidationError.OutOfMemory;
     };
     defer allocator.free(compressed_payload);
 
     const bytes_read = archive.file.readAll(compressed_payload) catch return ValidationError.IoError;
-    if (bytes_read < archive.header.payload_length) return ValidationError.UnexpectedEof;
+    if (bytes_read < vp_payload_len) return ValidationError.UnexpectedEof;
 
     const actual_hash = hash.hashBytes(compressed_payload);
     return std.mem.eql(u8, &actual_hash, &archive.header.payload_hash);
@@ -241,7 +249,11 @@ pub fn validateFile(
     const payload_offset = archive.getPayloadOffset();
     archive.file.seekTo(payload_offset) catch return ValidationError.IoError;
 
-    const compressed = allocator.alloc(u8, archive.header.payload_length) catch {
+    // Safely convert u64 to usize for 32-bit platforms
+    const vf_payload_len: usize = std.math.cast(usize, archive.header.payload_length) orelse {
+        return ValidationError.OutOfMemory;
+    };
+    const compressed = allocator.alloc(u8, vf_payload_len) catch {
         return ValidationError.OutOfMemory;
     };
     defer allocator.free(compressed);
@@ -370,7 +382,11 @@ pub fn detectCorruption(path: []const u8, allocator: Allocator) !?CorruptionInfo
         };
     };
 
-    const compressed_payload = allocator.alloc(u8, header.payload_length) catch {
+    // Safely convert u64 to usize for 32-bit platforms
+    const dc_payload_len: usize = std.math.cast(usize, header.payload_length) orelse {
+        return null; // File too large for this platform
+    };
+    const compressed_payload = allocator.alloc(u8, dc_payload_len) catch {
         return null;
     };
     defer allocator.free(compressed_payload);
@@ -386,7 +402,7 @@ pub fn detectCorruption(path: []const u8, allocator: Allocator) !?CorruptionInfo
         };
     };
 
-    if (payload_read < header.payload_length) {
+    if (payload_read < dc_payload_len) {
         return CorruptionInfo{
             .corruption_type = .truncated,
             .offset = payload_offset + payload_read,

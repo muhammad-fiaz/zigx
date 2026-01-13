@@ -66,13 +66,17 @@ pub fn extractWithResult(options: ExtractOptions) ExtractionError!ExtractResult 
     const payload_offset = archive.getPayloadOffset();
     archive.file.seekTo(payload_offset) catch return ExtractionError.IoError;
 
-    const compressed = allocator.alloc(u8, archive.header.payload_length) catch {
+    // Safely convert u64 payload_length to usize with bounds checking for 32-bit platforms
+    const payload_len: usize = std.math.cast(usize, archive.header.payload_length) orelse {
+        return ExtractionError.OutOfMemory; // File too large for this platform
+    };
+    const compressed = allocator.alloc(u8, payload_len) catch {
         return ExtractionError.OutOfMemory;
     };
     defer allocator.free(compressed);
 
     const bytes_read = archive.file.readAll(compressed) catch return ExtractionError.IoError;
-    if (bytes_read < archive.header.payload_length) return ExtractionError.UnexpectedEof;
+    if (bytes_read < payload_len) return ExtractionError.UnexpectedEof;
 
     if (options.validate) {
         const actual_hash = hash.hashBytes(compressed);
@@ -134,8 +138,13 @@ pub fn extractWithResult(options: ExtractOptions) ExtractionError!ExtractResult 
 
         if (offset + 8 > decompressed.len) return ExtractionError.UnexpectedEof;
 
-        const content_len = std.mem.readInt(u64, decompressed[offset..][0..8], .little);
+        const content_len_u64 = std.mem.readInt(u64, decompressed[offset..][0..8], .little);
         offset += 8;
+
+        // Safely convert u64 to usize for 32-bit platforms
+        const content_len: usize = std.math.cast(usize, content_len_u64) orelse {
+            return ExtractionError.OutOfMemory; // File too large for this platform
+        };
 
         if (offset + content_len > decompressed.len) return ExtractionError.UnexpectedEof;
 
@@ -214,7 +223,11 @@ pub fn extractFile(
     const payload_offset = archive.getPayloadOffset();
     archive.file.seekTo(payload_offset) catch return ExtractionError.IoError;
 
-    const compressed = allocator.alloc(u8, archive.header.payload_length) catch {
+    // Safely convert u64 to usize for 32-bit platforms
+    const result_payload_len: usize = std.math.cast(usize, archive.header.payload_length) orelse {
+        return ExtractionError.OutOfMemory;
+    };
+    const compressed = allocator.alloc(u8, result_payload_len) catch {
         return ExtractionError.OutOfMemory;
     };
     defer allocator.free(compressed);
@@ -240,13 +253,18 @@ pub fn extractFile(
 
         if (offset + 8 > decompressed.len) break;
 
-        const content_len = std.mem.readInt(u64, decompressed[offset..][0..8], .little);
+        const extract_content_len_u64 = std.mem.readInt(u64, decompressed[offset..][0..8], .little);
         offset += 8;
 
-        if (offset + content_len > decompressed.len) break;
+        // Safely convert u64 to usize for 32-bit platforms
+        const extract_content_len: usize = std.math.cast(usize, extract_content_len_u64) orelse {
+            return ExtractionError.OutOfMemory; // File too large for this platform
+        };
 
-        const content = decompressed[offset..][0..content_len];
-        offset += content_len;
+        if (offset + extract_content_len > decompressed.len) break;
+
+        const content = decompressed[offset..][0..extract_content_len];
+        offset += extract_content_len;
 
         if (std.mem.eql(u8, current_path, file_path)) {
             if (std.fs.path.dirname(output_path)) |dir| {

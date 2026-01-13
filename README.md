@@ -1,15 +1,40 @@
-# ZIGX
+<div align="center">
 
-High-performance compression library for Zig projects.
+<a href="https://muhammad-fiaz.github.io/zigx/"><img src="https://img.shields.io/badge/docs-muhammad--fiaz.github.io-blue" alt="Documentation"></a>
+<a href="https://ziglang.org/"><img src="https://img.shields.io/badge/Zig-0.15.2-orange.svg?logo=zig" alt="Zig Version"></a>
+<a href="https://github.com/muhammad-fiaz/zigx"><img src="https://img.shields.io/github/stars/muhammad-fiaz/zigx" alt="GitHub stars"></a>
+<a href="https://github.com/muhammad-fiaz/zigx/issues"><img src="https://img.shields.io/github/issues/muhammad-fiaz/zigx" alt="GitHub issues"></a>
+<a href="https://github.com/muhammad-fiaz/zigx/pulls"><img src="https://img.shields.io/github/issues-pr/muhammad-fiaz/zigx" alt="GitHub pull requests"></a>
+<a href="https://github.com/muhammad-fiaz/zigx"><img src="https://img.shields.io/github/last-commit/muhammad-fiaz/zigx" alt="GitHub last commit"></a>
+<a href="https://github.com/muhammad-fiaz/zigx"><img src="https://img.shields.io/github/license/muhammad-fiaz/zigx" alt="License"></a>
+<a href="https://github.com/muhammad-fiaz/zigx/actions/workflows/ci.yml"><img src="https://github.com/muhammad-fiaz/zigx/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+<img src="https://img.shields.io/badge/platforms-linux%20%7C%20windows%20%7C%20macos-blue" alt="Supported Platforms">
+<a href="https://github.com/muhammad-fiaz/zigx/actions/workflows/release.yml"><img src="https://github.com/muhammad-fiaz/zigx/actions/workflows/release.yml/badge.svg" alt="Release"></a>
+<a href="https://github.com/muhammad-fiaz/zigx/releases/latest"><img src="https://img.shields.io/github/v/release/muhammad-fiaz/zigx?label=Latest%20Release&style=flat-square" alt="Latest Release"></a>
+<a href="https://pay.muhammadfiaz.com"><img src="https://img.shields.io/badge/Sponsor-pay.muhammadfiaz.com-ff69b4?style=flat&logo=heart" alt="Sponsor"></a>
+<a href="https://github.com/sponsors/muhammad-fiaz"><img src="https://img.shields.io/badge/Sponsor-pink?style=social&logo=github" alt="GitHub Sponsors"></a>
+<a href="https://hits.sh/muhammad-fiaz/zigx/"><img src="https://hits.sh/muhammad-fiaz/zigx.svg?label=Visitors&extraCount=0&color=green" alt="Repo Visitors"></a>
 
-[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Zig](https://img.shields.io/badge/Zig-0.14%2B-orange.svg)](https://ziglang.org)
-[![Version](https://img.shields.io/badge/Version-0.0.1-green.svg)](CHANGELOG.md)
+<p><em>Fast and smaller compression file format for Zig.</em></p>
+
+<b><a href="https://muhammad-fiaz.github.io/zigx/">Documentation</a> |
+<a href="https://muhammad-fiaz.github.io/zigx/api/">API Reference</a> |
+<a href="https://muhammad-fiaz.github.io/zigx/guide/getting-started">Quick Start</a> |
+<a href="docs/contributing.md">Contributing</a></b>
+
+</div>
+
+Fast and smaller compression file format for Zig features LZ77+RLE hybrid compression with 64KB sliding window and lazy matching optimization.
+
+> [!NOTE]
+> ZIGX introduces a new archive format (.zigx) designed specifically for Zig projects. As a new format, it is not yet widely adopted, but offers modern features like versioned format, SHA-256 checksums, and excellent compression ratios.
+
+**If you find `zigx` useful, please give it a star!**
 
 ## Features
 
 - **LZ77+RLE Hybrid** - Advanced compression with 64KB sliding window
-- **Versioned Format** - Format v1 with compression versioning
+- **Versioned Format** - Format v1 with compression versioning for compatibility
 - **Multiple Levels** - BEST, DEFAULT, FAST, and STORE modes
 - **Security** - SHA-256 checksums, CRC32 verification
 - **Include/Exclude** - Pattern matching for files and directories
@@ -136,38 +161,16 @@ zig build run-example -- help
 | `getArchiveInfo()` | - | Get archive metadata |
 | `detectCorruption()` | - | Detect corruption type |
 
-### Options
-
-```zig
-// Compress/Bundle options
-.{
-    .allocator = allocator,          // Required
-    .include = &.{"src", "lib"},     // Files and directories
-    .exclude = &.{"*.tmp", ".git"},  // Exclude patterns
-    .output_path = "out.zigx",       // Output file
-    .level = .best,                  // Compression level
-}
-
-// Extract/Unbundle options
-.{
-    .archive_path = "in.zigx",       // Required
-    .output_dir = "output",          // Required
-    .allocator = allocator,          // Required
-    .validate = true,                // Validate checksums
-    .overwrite = false,              // Overwrite existing
-}
-```
-
 ### Compression Levels
 
-| Level | Description |
-|-------|-------------|
-| `.best` | Maximum compression |
-| `.default` | Balanced |
-| `.fast` | Speed optimized |
-| `.none` / `.store` | No compression |
+| Level | Description | Typical Ratio |
+|-------|-------------|---------------|
+| `.best` | Maximum compression | 28-32% |
+| `.default` | Balanced | 28-35% |
+| `.fast` | Speed optimized | 33-40% |
+| `.none` | No compression | 100%+ |
 
-## Format
+## Format Specification
 
 ```
 Header (128 bytes)
@@ -191,9 +194,9 @@ Payload (variable)
 
 Full documentation: [muhammad-fiaz.github.io/zigx](https://muhammad-fiaz.github.io/zigx)
 
-- [Getting Started](docs/guide/getting-started.md)
-- [API Reference](docs/api/index.md)
-- [Examples](docs/examples/index.md)
+- [Getting Started](https://muhammad-fiaz.github.io/zigx/guide/getting-started)
+- [API Reference](https://muhammad-fiaz.github.io/zigx/api/)
+- [Examples](https://muhammad-fiaz.github.io/zigx/examples/)
 
 ## Contributing
 

@@ -21,6 +21,9 @@ test_io.zig
 # Archive outputs
 *.zigx
 
+# Benchmark outputs (generated locally)
+benchmark-results.md
+
 # Editor and IDE
 .vscode/
 .idea/

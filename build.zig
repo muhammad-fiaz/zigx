@@ -104,4 +104,24 @@ pub fn build(b: *std.Build) void {
     });
     const docs_step = b.step("docs", "Generate API documentation");
     docs_step.dependOn(&install_docs.step);
+
+    // Benchmark executable
+    const bench_mod = b.createModule(.{
+        .root_source_file = b.path("bench/benchmark.zig"),
+        .target = target,
+        .optimize = .ReleaseFast,
+    });
+    bench_mod.addImport("zigx", lib_mod);
+
+    const bench_exe = b.addExecutable(.{
+        .name = "benchmark",
+        .root_module = bench_mod,
+    });
+
+    const run_bench = b.addRunArtifact(bench_exe);
+    run_bench.setCwd(b.path("."));
+    const bench_step = b.step("bench", "Run compression benchmarks");
+    bench_step.dependOn(&run_bench.step);
+
+    b.installArtifact(bench_exe);
 }
