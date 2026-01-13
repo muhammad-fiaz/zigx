@@ -1,0 +1,14 @@
+{
+  "name": "zigx-docs",
+  "version": "1.0.0",
+  "description": "Documentation for ZIGX - High-performance compression library for Zig",
+  "scripts": {
+    "docs:dev": "vitepress dev",
+    "docs:build": "vitepress build",
+    "docs:preview": "vitepress preview"
+  },
+  "devDependencies": {
+    "vitepress": "^1.6.4",
+    "vitepress-plugin-llms": "^1.10.0"
+  }
+}
