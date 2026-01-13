@@ -1,0 +1,165 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    name: Test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.15.2
+      - name: Run Tests
+        run: zig build test --summary all
+
+  build-library:
+    name: Build Library (${{ matrix.target }})
+    needs: test
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - x86_64-windows
+          - x86-windows
+          - x86_64-linux
+          - x86-linux
+          - aarch64-linux
+          - x86_64-macos
+          - aarch64-macos
+          - x86_64-freestanding
+          - aarch64-freestanding
+          - riscv64-freestanding
+          - arm-freestanding
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.15.2
+
+      - name: Build Library
+        run: zig build -Doptimize=ReleaseSafe -Dtarget=${{ matrix.target }}
+
+      - name: Prepare Release Artifacts
+        run: |
+          mkdir -p release
+          if [[ "${{ matrix.target }}" == *"windows"* ]]; then
+            cp zig-out/lib/zigx.lib release/zigx-${{ matrix.target }}.lib 2>/dev/null || true
+          else
+            cp zig-out/lib/libzigx.a release/libzigx-${{ matrix.target }}.a 2>/dev/null || true
+          fi
+
+      - name: Upload Release Artifacts
+        run: |
+          if ls release/* 1> /dev/null 2>&1; then
+            gh release upload "${{ github.event.release.tag_name }}" release/* --clobber || true
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+
+  update-release:
+    name: Update Release Description
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get Release URL
+        id: get_url
+        run: echo "url=https://github.com/${{ github.repository }}/archive/refs/tags/${{ github.event.release.tag_name }}.tar.gz" >> $GITHUB_OUTPUT
+
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.15.2
+
+      - name: Calculate Hash
+        id: calc_hash
+        run: |
+          zig fetch --save ${{ steps.get_url.outputs.url }}
+          HASH=$(grep '.hash =' build.zig.zon | cut -d '"' -f 2)
+          echo "hash=$HASH" >> $GITHUB_OUTPUT
+
+      - name: Update Release Body
+        uses: softprops/action-gh-release@v2
+        with:
+          body: |
+            ${{ github.event.release.body }}
+
+            ## Documentation
+
+            Full documentation can be found at https://muhammad-fiaz.github.io/zigx/
+
+            ## Installation
+
+            ### Option A - Automatic (Recommended)
+
+            Run this to install the dependency and automatically save the hash:
+
+            ```bash
+            zig fetch --save https://github.com/${{ github.repository }}/archive/refs/tags/${{ github.event.release.tag_name }}.tar.gz
+            ```
+
+            After running, Zig updates your `build.zig.zon` with the correct hash automatically.
+
+            The entry will look like:
+
+            ```zig
+            .dependencies = .{
+                .zigx = .{
+                    .url = "https://github.com/${{ github.repository }}/archive/refs/tags/${{ github.event.release.tag_name }}.tar.gz",
+                    .hash = "${{ steps.calc_hash.outputs.hash }}",
+                },
+            },
+            ```
+
+            ### Option B - Manual
+
+            ```bash
+            zig fetch https://github.com/${{ github.repository }}/archive/refs/tags/${{ github.event.release.tag_name }}.tar.gz
+            ```
+
+            Copy the hash into your `build.zig.zon`:
+
+            ```zig
+            .hash = "${{ steps.calc_hash.outputs.hash }}"
+            ```
+
+            ## Downloads (Prebuilt Library)
+
+            | Platform | Architecture | File |
+            |----------|--------------|------|
+            | Windows | x86_64 | [zigx-x86_64-windows.lib](https://github.com/${{ github.repository }}/releases/download/${{ github.event.release.tag_name }}/zigx-x86_64-windows.lib) |
+            | Windows | x86 | [zigx-x86-windows.lib](https://github.com/${{ github.repository }}/releases/download/${{ github.event.release.tag_name }}/zigx-x86-windows.lib) |
+            | Linux | x86_64 | [libzigx-x86_64-linux.a](https://github.com/${{ github.repository }}/releases/download/${{ github.event.release.tag_name }}/libzigx-x86_64-linux.a) |
+            | Linux | x86 | [libzigx-x86-linux.a](https://github.com/${{ github.repository }}/releases/download/${{ github.event.release.tag_name }}/libzigx-x86-linux.a) |
+            | Linux | aarch64 | [libzigx-aarch64-linux.a](https://github.com/${{ github.repository }}/releases/download/${{ github.event.release.tag_name }}/libzigx-aarch64-linux.a) |
+            | macOS | x86_64 | [libzigx-x86_64-macos.a](https://github.com/${{ github.repository }}/releases/download/${{ github.event.release.tag_name }}/libzigx-x86_64-macos.a) |
+            | macOS | aarch64 | [libzigx-aarch64-macos.a](https://github.com/${{ github.repository }}/releases/download/${{ github.event.release.tag_name }}/libzigx-aarch64-macos.a) |
+            | Bare Metal | x86_64 | [libzigx-x86_64-freestanding.a](https://github.com/${{ github.repository }}/releases/download/${{ github.event.release.tag_name }}/libzigx-x86_64-freestanding.a) |
+            | Bare Metal | aarch64 | [libzigx-aarch64-freestanding.a](https://github.com/${{ github.repository }}/releases/download/${{ github.event.release.tag_name }}/libzigx-aarch64-freestanding.a) |
+            | Bare Metal | RISC-V 64 | [libzigx-riscv64-freestanding.a](https://github.com/${{ github.repository }}/releases/download/${{ github.event.release.tag_name }}/libzigx-riscv64-freestanding.a) |
+            | Bare Metal | ARM | [libzigx-arm-freestanding.a](https://github.com/${{ github.repository }}/releases/download/${{ github.event.release.tag_name }}/libzigx-arm-freestanding.a) |
+
+            ### Using Prebuilt Libraries
+
+            1. Download the library for your platform.
+            2. Place it in your project (e.g., in a `libs/` folder).
+            3. Update your `build.zig`:
+
+            ```zig
+            exe.addLibraryPath(b.path("libs"));
+            exe.linkSystemLibrary("zigx");
+            ```
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}

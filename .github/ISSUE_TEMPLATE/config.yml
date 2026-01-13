@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://muhammad-fiaz.github.io/zigx/
+    about: Check the documentation for guides, API reference, and examples
+  - name: Discussions
+    url: https://github.com/muhammad-fiaz/zigx/discussions
+    about: Ask questions and discuss ideas with the community

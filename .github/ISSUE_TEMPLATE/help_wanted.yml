@@ -1,0 +1,91 @@
+name: Help Wanted
+description: Ask for help with ZIGX usage or integration
+title: "[Help]: "
+labels: ["help wanted", "question"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Need help with ZIGX? Please provide details about what you are trying to accomplish.
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Question / Problem
+      description: What are you trying to do or what do you need help with?
+      placeholder: Describe your question or problem...
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Provide context about your use case or project.
+      placeholder: What are you building? What is your goal?
+    validations:
+      required: true
+
+  - type: textarea
+    id: code
+    attributes:
+      label: Code (if applicable)
+      description: Share relevant code you have tried.
+      render: zig
+      placeholder: |
+        const zigx = @import("zigx");
+        
+        // Your code...
+
+  - type: textarea
+    id: tried
+    attributes:
+      label: What Have You Tried?
+      description: Describe what you have already tried.
+      placeholder: List approaches you have attempted...
+
+  - type: input
+    id: zig-version
+    attributes:
+      label: Zig Version
+      placeholder: "0.15.2"
+
+  - type: input
+    id: zigx-version
+    attributes:
+      label: ZIGX Version
+      placeholder: "0.0.1"
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      options:
+        - Installation / Setup
+        - Creating archives
+        - Extracting archives
+        - Validation
+        - API usage
+        - Build integration
+        - Performance
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Any other relevant information.
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I have read the documentation at https://muhammad-fiaz.github.io/zigx/
+          required: true
+        - label: I have searched existing issues for similar questions
+          required: true
