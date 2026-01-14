@@ -11,7 +11,7 @@ All notable changes to ZIGX are documented in this file.
 - **Efficiency**: Optimized file operations using shared utilities.
 
 ### Fixed
-- **32-bit Platform Support**: Fixed type mismatch error (`expected type 'usize', found 'u64'`) on 32-bit targets (x86-windows, arm-linux, x86-linux) in the repair function.
+- **32-bit Platform Support**: Fixed type mismatch error (`expected type 'usize', found 'u64'`) on 32-bit targets (x86-windows, arm-linux, x86-linux) in `manager.zig` and `validator.zig`.
 
 ### Changed
 - **Compression**: Refactored internal configuration to strict Zstd levels (1-22).
