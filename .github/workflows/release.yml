@@ -115,13 +115,13 @@ jobs:
       - name: Calculate Hash
         id: calc_hash
         run: |
-          zig fetch --save ${{ steps.get_url.outputs.url }}
-          HASH=$(grep '.hash =' build.zig.zon | cut -d '"' -f 2)
+          HASH=$(zig fetch ${{ steps.get_url.outputs.url }})
           echo "hash=$HASH" >> $GITHUB_OUTPUT
 
       - name: Update Release Body
         uses: softprops/action-gh-release@v2
         with:
+          token: ${{ secrets.GH_TOKEN }}
           body: |
             ${{ github.event.release.body }}
 
