@@ -79,63 +79,57 @@ pub const OutputConfig = struct {
     show_file_list: bool = true,
 };
 
-/// Compression levels matching Zig's std.compress.flate
-pub const CompressionLevel = enum(u4) {
+/// Compression levels for Zstandard (zstd) compression
+/// Maps directly to zstd levels 1-22
+pub const CompressionLevel = enum(u8) {
+    none = 0,
+    fast = 1, // zstd 1
+    level_2 = 2,
+    default = 3, // zstd 3
     level_4 = 4,
     level_5 = 5,
     level_6 = 6,
     level_7 = 7,
     level_8 = 8,
     level_9 = 9,
-    fast = 0xb,
-    default = 0xc,
-    best = 0xd,
-    none = 0, // No compression (store only)
+    level_10 = 10,
+    level_11 = 11,
+    level_12 = 12,
+    level_13 = 13,
+    level_14 = 14,
+    level_15 = 15,
+    level_16 = 16,
+    level_17 = 17,
+    level_18 = 18,
+    best = 19, // zstd 19
+    level_20 = 20,
+    level_21 = 21,
+    level_22 = 22,
 
-    pub fn toFlateLevel(self: CompressionLevel) ?std.compress.flate.Compress.Level {
-        return switch (self) {
-            .level_4 => .level_4,
-            .level_5 => .level_5,
-            .level_6 => .level_6,
-            .level_7 => .level_7,
-            .level_8 => .level_8,
-            .level_9 => .level_9,
-            .fast => .fast,
-            .default => .default,
-            .best => .best,
-            .none => null,
-        };
+    // Aliases for compatibility/clarity
+    pub const level_1 = @This().fast;
+    pub const level_3 = @This().default;
+    pub const level_19 = @This().best;
+
+    /// Convert to zstd compression level (1-22)
+    pub fn toZstdLevel(self: CompressionLevel) c_int {
+        return @intCast(@intFromEnum(self));
     }
 
     pub fn name(self: CompressionLevel) []const u8 {
         return switch (self) {
-            .level_4 => "level 4",
-            .level_5 => "level 5",
-            .level_6 => "level 6",
-            .level_7 => "level 7",
-            .level_8 => "level 8",
-            .level_9 => "level 9",
-            .fast => "fast",
-            .default => "default",
-            .best => "best",
             .none => "none (store)",
+            .fast => "fast (zstd 1)",
+            .default => "default (zstd 3)",
+            .best => "best (zstd 19)",
+            else => "level custom",
         };
     }
 };
 
-/// Container format for deflate compression
+/// Container format (Deprecated/Unused for Zstd)
 pub const Container = enum {
-    raw, // No header/footer, raw deflate stream
-    gzip, // gzip format with header and CRC32 footer
-    zlib, // zlib format with header and Adler32 footer
-
-    pub fn toFlateContainer(self: Container) std.compress.flate.Container {
-        return switch (self) {
-            .raw => .raw,
-            .gzip => .gzip,
-            .zlib => .zlib,
-        };
-    }
+    raw,
 };
 
 /// Global default configuration instance.
@@ -184,8 +178,8 @@ test "default_config" {
 }
 
 test "compression_level_names" {
-    try std.testing.expectEqualStrings("fast", CompressionLevel.fast.name());
-    try std.testing.expectEqualStrings("best", CompressionLevel.best.name());
+    try std.testing.expectEqualStrings("fast (zstd 1)", CompressionLevel.fast.name());
+    try std.testing.expectEqualStrings("best (zstd 19)", CompressionLevel.best.name());
     try std.testing.expectEqualStrings("none (store)", CompressionLevel.none.name());
 }
 

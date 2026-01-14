@@ -12,6 +12,7 @@ pub const security = @import("security.zig");
 pub const hash = @import("hash.zig");
 pub const compression = @import("compression.zig");
 pub const config = @import("config.zig");
+pub const manager = @import("manager.zig");
 
 // Re-export config types
 pub const Config = config.Config;
@@ -223,6 +224,16 @@ pub fn extract(options: ExtractOptions) ExtractionError!void {
 /// Alias for extract() - extract a .zigx archive
 pub const unbundle = extract;
 
+/// Update an existing archive (Add/Remove files)
+pub fn update(options: manager.UpdateOptions) manager.ManagerError!void {
+    return manager.update(options);
+}
+
+/// Repair a corrupted archive
+pub fn repair(archive_path: []const u8, output_path: []const u8, allocator: Allocator) !manager.RepairResult {
+    return manager.repair(archive_path, output_path, allocator);
+}
+
 /// Extract files and return detailed result
 pub fn extractWithResult(options: ExtractOptions) ExtractionError!ExtractResult {
     return extractor.extractWithResult(options);
@@ -291,6 +302,7 @@ test "imports" {
     _ = security;
     _ = hash;
     _ = compression;
+    _ = manager;
 }
 
 test "header_constants" {

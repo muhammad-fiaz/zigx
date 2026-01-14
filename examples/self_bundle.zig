@@ -19,6 +19,11 @@ const Command = enum {
     list,
     compare,
     help,
+    repair,
+    update,
+    validate,
+    metadata,
+    sign,
 };
 
 pub fn main() !void {
@@ -38,6 +43,11 @@ pub fn main() !void {
         .list => try runList(allocator, args),
         .compare => try runCompare(allocator),
         .help => printHelp(),
+        .repair => try runRepair(allocator, args),
+        .update => try runUpdate(allocator, args),
+        .validate => try runValidate(allocator, args),
+        .metadata => try runMetadata(allocator, args),
+        .sign => try runSign(allocator, args),
     }
 }
 
@@ -51,6 +61,11 @@ fn parseCommand(args: []const []const u8) Command {
     if (std.mem.eql(u8, cmd, "list") or std.mem.eql(u8, cmd, "l") or std.mem.eql(u8, cmd, "ls")) return .list;
     if (std.mem.eql(u8, cmd, "compare") or std.mem.eql(u8, cmd, "c")) return .compare;
     if (std.mem.eql(u8, cmd, "help") or std.mem.eql(u8, cmd, "-h") or std.mem.eql(u8, cmd, "--help")) return .help;
+    if (std.mem.eql(u8, cmd, "repair") or std.mem.eql(u8, cmd, "fix")) return .repair;
+    if (std.mem.eql(u8, cmd, "update") or std.mem.eql(u8, cmd, "up")) return .update;
+    if (std.mem.eql(u8, cmd, "validate") or std.mem.eql(u8, cmd, "check") or std.mem.eql(u8, cmd, "v")) return .validate;
+    if (std.mem.eql(u8, cmd, "metadata") or std.mem.eql(u8, cmd, "meta")) return .metadata;
+    if (std.mem.eql(u8, cmd, "sign")) return .sign;
 
     return .compare;
 }
@@ -71,21 +86,29 @@ fn printHelp() void {
         \\  info, i         Show archive information
         \\  list, ls        List files in archive
         \\  compare, c      Compare compression levels (default)
+        \\  update, up      Add/Remove files from archive
+        \\  repair, fix     Auto-fix corrupted archive
+        \\  validate, v     Verify archive integrity
+        \\  metadata, meta  Manage archive metadata
+        \\  sign            Sign archive
         \\  help, -h        Show this help
         \\
         \\Examples:
         \\  zig build run-example                        Run comparison demo
         \\  zig build run-example -- bundle              Create archive
         \\  zig build run-example -- unbundle a.zigx .   Extract archive
-        \\  zig build run-example -- info archive.zigx   Show archive info
-        \\  zig build run-example -- list archive.zigx   List files
+        \\  zig build run-example -- update a.zigx -add "new.txt"
+        \\  zig build run-example -- repair broken.zigx fixed.zigx
+        \\  zig build run-example -- metadata a.zigx set key "value"
         \\
         \\Features:
-        \\  LZ77 + RLE hybrid compression
-        \\  64KB sliding window with lazy matching
+        \\  Zstandard (zstd) Compression
+        \\  Modern compression with high ratios
         \\  SHA-256 checksums, CRC32 verification
+        \\  Auto-repair functionality
         \\  Include/exclude patterns for files
         \\  Versioned format for compatibility
+        \\  Metadata management & Signing
         \\
         \\
     , .{ zigx.VERSION, zigx.FORMAT_VERSION, zigx.COMPRESSION_VERSION });
@@ -109,9 +132,7 @@ fn runBundle(allocator: std.mem.Allocator, args: []const []const u8) !void {
     }
 
     // Create output directory if needed
-    if (std.mem.lastIndexOf(u8, output_path, "/") orelse std.mem.lastIndexOf(u8, output_path, "\\")) |idx| {
-        std.fs.cwd().makePath(output_path[0..idx]) catch {};
-    }
+    try zigx.utils.ensureParentDir(output_path);
 
     std.debug.print("Creating archive with BEST compression...\n", .{});
     std.debug.print("Include: src, build.zig, build.zig.zon, LICENSE, README.md\n", .{});
@@ -361,4 +382,182 @@ fn displayResult(result: *const zigx.CompressResult) void {
         std.debug.print("  Mode:       store (no compression)\n", .{});
     }
     std.debug.print("  Hash:       {s}...\n", .{result.archive_hash[0..32]});
+}
+
+fn runRepair(allocator: std.mem.Allocator, args: []const []const u8) !void {
+    if (args.len < 3) {
+        std.debug.print("\nUsage: zigx repair <corrupted.zigx> [repaired.zigx]\n\n", .{});
+        return;
+    }
+
+    const archive_path = args[2];
+    const output_path = if (args.len > 3) args[3] else "repaired.zigx";
+
+    std.debug.print("\n[ZIGX Repair]\n", .{});
+    std.debug.print("Attempting to repair: {s}\n", .{archive_path});
+    std.debug.print("Output path:        {s}\n", .{output_path});
+
+    const result = zigx.repair(archive_path, output_path, allocator) catch |err| {
+        std.debug.print("\nRepair failed: {}\n", .{err});
+        return;
+    };
+
+    if (!result.was_corrupted) {
+        std.debug.print("\nFile was valid! Simply copied to output.\n", .{});
+    } else {
+        std.debug.print("\nRepair complete!\n", .{});
+        std.debug.print("Recovered {d} files.\n", .{result.recovered_files});
+    }
+}
+
+fn runUpdate(allocator: std.mem.Allocator, args: []const []const u8) !void {
+    if (args.len < 3) {
+        std.debug.print("\nUsage: zigx update <archive.zigx> [actions...]\n", .{});
+        std.debug.print("Actions:\n", .{});
+        std.debug.print("  -add <file>      Add file to archive\n", .{});
+        std.debug.print("  -rm <pattern>    Remove files matching pattern\n\n", .{});
+        return;
+    }
+
+    const archive_path = args[2];
+    var add_list = std.ArrayListUnmanaged([]const u8){};
+    defer add_list.deinit(allocator);
+    var rm_list = std.ArrayListUnmanaged([]const u8){};
+    defer rm_list.deinit(allocator);
+
+    var i: usize = 3;
+    while (i < args.len) : (i += 1) {
+        const arg = args[i];
+        if (std.mem.eql(u8, arg, "-add") and i + 1 < args.len) {
+            try add_list.append(allocator, args[i + 1]);
+            i += 1;
+        } else if (std.mem.eql(u8, arg, "-rm") and i + 1 < args.len) {
+            try rm_list.append(allocator, args[i + 1]);
+            i += 1;
+        }
+    }
+
+    if (add_list.items.len == 0 and rm_list.items.len == 0) {
+        std.debug.print("No actions specified.\n", .{});
+        return;
+    }
+
+    std.debug.print("\n[ZIGX Update]\n", .{});
+    std.debug.print("Archive: {s}\n", .{archive_path});
+    if (add_list.items.len > 0) std.debug.print("Adding:  {d} files\n", .{add_list.items.len});
+    if (rm_list.items.len > 0) std.debug.print("Removing: patterns {s}\n", .{rm_list.items[0]}); // Simple display for now
+
+    zigx.update(.{
+        .allocator = allocator,
+        .archive_path = archive_path,
+        .add_files = if (add_list.items.len > 0) add_list.items else null,
+        .remove_patterns = if (rm_list.items.len > 0) rm_list.items else null,
+    }) catch |err| {
+        std.debug.print("\nUpdate failed: {}\n", .{err});
+        return;
+    };
+
+    std.debug.print("\nArchive updated successfully.\n", .{});
+}
+
+fn runValidate(allocator: std.mem.Allocator, args: []const []const u8) !void {
+    if (args.len < 3) {
+        std.debug.print("\nUsage: zigx validate <archive.zigx>\n\n", .{});
+        return;
+    }
+
+    const archive_path = args[2];
+    std.debug.print("\n[ZIGX Validation]\n", .{});
+    std.debug.print("Checking: {s}\n\n", .{archive_path});
+
+    var result = zigx.validateDetailed(archive_path, allocator) catch |err| {
+        std.debug.print("Validation/IO error: {}\n", .{err});
+        return;
+    };
+    defer result.deinit();
+
+    if (result.is_valid) {
+        std.debug.print("PASS: Archive is valid.\n", .{});
+        std.debug.print("  Headers:      OK\n", .{});
+        std.debug.print("  Payload Hash: OK\n", .{});
+        std.debug.print("  Files:        {d} OK\n", .{result.files_validated});
+    } else {
+        std.debug.print("FAIL: Archive is corrupted.\n", .{});
+        if (result.corruption_info) |info| {
+            std.debug.print("  Reason:       {s}\n", .{@tagName(info.corruption_type)});
+        }
+        if (!result.header_valid) std.debug.print("  Headers:      INVALID\n", .{});
+        if (!result.payload_hash_valid) std.debug.print("  Payload Hash: MISMATCH\n", .{});
+        if (result.files_with_errors > 0) {
+            std.debug.print("  Files Bad:    {d}\n", .{result.files_with_errors});
+        }
+    }
+}
+
+fn runMetadata(allocator: std.mem.Allocator, args: []const []const u8) !void {
+    if (args.len < 4) {
+        std.debug.print("Usage: zigx metadata <archive> <action> [key] [value]\n", .{});
+        std.debug.print("Actions: get, get-all, set, delete\n", .{});
+        return;
+    }
+    const archive_path = args[2];
+    const action = args[3];
+
+    if (std.mem.eql(u8, action, "get-all")) {
+        var map = try zigx.manager.getAllMetadata(archive_path, allocator);
+        defer {
+            var it = map.iterator();
+            while (it.next()) |entry| {
+                allocator.free(entry.key_ptr.*);
+                allocator.free(entry.value_ptr.*);
+            }
+            map.deinit(allocator);
+        }
+        var it = map.iterator();
+        while (it.next()) |entry| {
+            std.debug.print("{s} = {s}\n", .{ entry.key_ptr.*, entry.value_ptr.* });
+        }
+    } else if (std.mem.eql(u8, action, "get")) {
+        if (args.len < 5) {
+            std.debug.print("Missing key\n", .{});
+            return;
+        }
+        const key = args[4];
+        if (try zigx.manager.getMetadata(archive_path, key, allocator)) |val| {
+            std.debug.print("{s}\n", .{val});
+            allocator.free(val);
+        } else {
+            std.debug.print("Key not found\n", .{});
+        }
+    } else if (std.mem.eql(u8, action, "set")) {
+        if (args.len < 6) {
+            std.debug.print("Missing value\n", .{});
+            return;
+        }
+        const key = args[4];
+        const val = args[5];
+        const update = zigx.manager.MetadataUpdate{ .key = key, .op = .{ .set = val } };
+        try zigx.manager.updateMetadata(archive_path, &.{update}, allocator);
+        std.debug.print("Metadata set.\n", .{});
+    } else if (std.mem.eql(u8, action, "delete")) {
+        if (args.len < 5) {
+            std.debug.print("Missing key\n", .{});
+            return;
+        }
+        const key = args[4];
+        const update = zigx.manager.MetadataUpdate{ .key = key, .op = .delete };
+        try zigx.manager.updateMetadata(archive_path, &.{update}, allocator);
+        std.debug.print("Metadata deleted.\n", .{});
+    }
+}
+
+fn runSign(allocator: std.mem.Allocator, args: []const []const u8) !void {
+    if (args.len < 3) {
+        std.debug.print("Usage: zigx sign <archive> <signature_string>\n", .{});
+        return;
+    }
+    const archive_path = args[2];
+    const signature = if (args.len > 3) args[3] else "default_signature_123";
+    try zigx.manager.setSignature(archive_path, signature, allocator);
+    std.debug.print("Archive signed.\n", .{});
 }

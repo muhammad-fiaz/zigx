@@ -2,13 +2,47 @@
 
 ## Supported Versions
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 0.0.1   | :white_check_mark: |
+ZIGX file format support policy:
+
+| Version | Format | Status |
+| :--- | :--- | :--- |
+| 0.0.1 | v1 | :white_check_mark: Supported |
+
+## Security Features
+
+ZIGX includes built-in security features to detect data corruption and tampering:
+
+1. **SHA-256 Payload Hash** - Verifies the entire payload integrity
+2. **Per-File Checksums** - Validates individual file content
+3. **CRC32 Compression Check** - Ensures compressed data validity
+4. **Header Validation** - Magic bytes and structure verification
+5. **Path Normalization** - Prevents directory traversal attacks
+6. **Bounds Checking** - Memory-safe implementation in Zig
+7. **Version Checking** - Prevents processing unsupported formats
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in ZIGX, please report it responsibly.
+Please report vulnerabilities to the maintainers via GitHub Issues or private email.
+
+## Validation & Corruption Detection
+
+The library provides robust tools for validation and corruption recovery:
+
+- `isValid(path)` - Quick header check
+- `verify(options)` - Full cryptographic verification
+- `detectCorruption(path)` - Identifies specific corruption types
+
+### Error Handling
+
+The library is designed to handle all exceptions gracefully:
+
+- **InvalidMagic** - File is not a valid ZIGX archive
+- **UnsupportedVersion** - Format version is not supported
+- **ChecksumMismatch** - Data has been modified/corrupted
+- **FileToLarge** - Data exceeds memory limits (memory-safe)
+- **UnexpectedEndOfStream** - Truncated file detection
+
+Attempts to read corrupt archives will return secure error codes rather than crashing. All buffer allocations are bounded and checked.
 
 ### How to Report
 

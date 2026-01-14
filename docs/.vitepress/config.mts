@@ -4,7 +4,7 @@ import llmstxt from 'vitepress-plugin-llms';
 // Site configuration
 const SITE_URL = 'https://muhammad-fiaz.github.io/zigx';
 const SITE_TITLE = 'ZIGX';
-const SITE_DESCRIPTION = 'Fast and light-weight compression file format for Zig';
+const SITE_DESCRIPTION = 'Fast, light-weight compressed file format specifically designed for Zig distribution packages';
 
 // Google Analytics and Google Tag Manager IDs
 export const GA_ID = 'G-6BVYCRK57P';
@@ -52,7 +52,7 @@ export default defineConfig({
     
     // SEO Meta Tags
     ['meta', { name: 'author', content: 'Muhammad Fiaz' }],
-    ['meta', { name: 'keywords', content: 'zig, compression, zigx, lz77, rle, archive, bundler, high-performance' }],
+    ['meta', { name: 'keywords', content: 'zig, compression, zigx, zstd, zstandard, archive, bundler, high-performance' }],
     ['meta', { name: 'robots', content: 'index, follow' }],
     ['meta', { name: 'googlebot', content: 'index, follow' }],
     ['link', { rel: 'canonical', href: SITE_URL }],
@@ -161,7 +161,8 @@ export default defineConfig({
             { text: 'Bundling', link: '/guide/bundling' },
             { text: 'Extracting', link: '/guide/extracting' },
             { text: 'Exclude Patterns', link: '/guide/exclude-patterns' },
-            { text: 'Metadata', link: '/guide/metadata' }
+            { text: 'Metadata', link: '/guide/metadata' },
+            { text: 'Repair & Update', link: '/guide/repair-and-update' }
           ]
         },
         {
@@ -182,6 +183,7 @@ export default defineConfig({
             { text: 'unbundle / extract', link: '/api/extract' },
             { text: 'getArchiveInfo', link: '/api/get-archive-info' },
             { text: 'validate / verify', link: '/api/validate' },
+            { text: 'manager', link: '/api/manager' },
             { text: 'Types', link: '/api/types' }
           ]
         }

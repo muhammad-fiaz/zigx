@@ -90,9 +90,9 @@ pub const CompressOptions = struct {
     /// Files and directories to include in archive
     /// Example: &.{ "src", "build.zig", "README.md" }
     include: ?[]const []const u8 = null,
-    /// Legacy: individual files (use 'include' instead)
+    /// Deprecated: individual files (use 'include' instead)
     files: ?[]const []const u8 = null,
-    /// Legacy: directories (use 'include' instead)
+    /// Deprecated: directories (use 'include' instead)
     directories: ?[]const []const u8 = null,
     base_dir: []const u8 = ".",
     output_path: ?[]const u8 = null,
@@ -107,7 +107,7 @@ pub const CompressOptions = struct {
     /// Exclude patterns - files/folders matching these patterns will be skipped
     /// Example: &.{ "node_modules", ".git", "*.tmp" }
     exclude: []const []const u8 = &.{},
-    /// Legacy: use 'exclude' instead
+    /// Deprecated: use 'exclude' instead
     exclude_patterns: []const []const u8 = &.{},
     /// Compress metadata section
     compress_metadata: bool = false,
@@ -141,65 +141,10 @@ const FileToCompress = struct {
     }
 };
 
-/// Check if a path matches any exclude pattern
-fn matchesExcludePattern(path: []const u8, patterns: []const []const u8) bool {
-    for (patterns) |pattern| {
-        // Direct match
-        if (std.mem.eql(u8, path, pattern)) return true;
-
-        // Check if path contains pattern as a directory component
-        if (std.mem.indexOf(u8, path, pattern)) |_| {
-            // Pattern like "node_modules" should match "node_modules/..." or ".../node_modules/..."
-            if (pattern.len > 0 and pattern[pattern.len - 1] == '/') {
-                // Directory pattern (ends with /)
-                const dir_name = pattern[0 .. pattern.len - 1];
-                if (std.mem.startsWith(u8, path, dir_name)) return true;
-                // Check for /pattern in path (e.g., /node_modules/)
-                var search_idx: usize = 0;
-                while (search_idx < path.len) {
-                    if (path[search_idx] == '/' and search_idx + 1 < path.len) {
-                        const remaining = path[search_idx + 1 ..];
-                        if (std.mem.startsWith(u8, remaining, pattern)) return true;
-                    }
-                    search_idx += 1;
-                }
-            } else {
-                // Check for exact directory match or file match
-                if (std.mem.startsWith(u8, path, pattern) and (path.len == pattern.len or path[pattern.len] == '/')) return true;
-                // Check for pattern in middle of path
-                var search_path = path;
-                while (std.mem.indexOf(u8, search_path, pattern)) |idx| {
-                    const is_start = idx == 0 or search_path[idx - 1] == '/';
-                    const end_idx = idx + pattern.len;
-                    const is_end = end_idx >= search_path.len or search_path[end_idx] == '/';
-                    if (is_start and is_end) return true;
-                    if (end_idx < search_path.len) {
-                        search_path = search_path[idx + 1 ..];
-                    } else break;
-                }
-            }
-        }
-
-        // Wildcard pattern matching (simple glob)
-        if (std.mem.indexOf(u8, pattern, "*")) |star_idx| {
-            if (star_idx == 0) {
-                // *.ext pattern
-                const ext = pattern[1..];
-                if (std.mem.endsWith(u8, path, ext)) return true;
-            } else if (star_idx == pattern.len - 1) {
-                // prefix* pattern
-                const prefix = pattern[0..star_idx];
-                if (std.mem.startsWith(u8, path, prefix)) return true;
-            }
-        }
-    }
-    return false;
-}
-
 pub fn compress(options: CompressOptions) CompressError!CompressResult {
     const allocator = options.allocator;
 
-    // Merge exclude patterns from both 'exclude' and legacy 'exclude_patterns'
+    // Merge exclude patterns from both 'exclude' and deprecated 'exclude_patterns'
     const exclude_list = if (options.exclude.len > 0) options.exclude else options.exclude_patterns;
 
     // Check if we have anything to bundle
@@ -225,7 +170,7 @@ pub fn compress(options: CompressOptions) CompressError!CompressResult {
     // Process unified 'include' option (handles both files and directories)
     if (options.include) |include_list| {
         for (include_list) |path| {
-            if (matchesExcludePattern(path, exclude_list)) continue;
+            if (utils.matchesPattern(path, exclude_list)) continue;
 
             // Check if it's a directory or file
             var dir = std.fs.cwd().openDir(options.base_dir, .{}) catch continue;
@@ -245,15 +190,15 @@ pub fn compress(options: CompressOptions) CompressError!CompressResult {
         }
     }
 
-    // Legacy: process 'files' option
+    // Deprecated: process 'files' option
     if (options.files) |file_list| {
         for (file_list) |file_path| {
-            if (matchesExcludePattern(file_path, exclude_list)) continue;
+            if (utils.matchesPattern(file_path, exclude_list)) continue;
             try collectFile(options.base_dir, file_path, &files, allocator);
         }
     }
 
-    // Legacy: process 'directories' option
+    // Deprecated: process 'directories' option
     if (options.directories) |dir_list| {
         for (dir_list) |dir_path| {
             try collectDirectoryWithExcludes(options.base_dir, dir_path, &files, allocator, exclude_list);
@@ -409,9 +354,7 @@ pub fn compress(options: CompressOptions) CompressError!CompressResult {
     };
     errdefer allocator.free(output_path);
 
-    if (std.mem.lastIndexOf(u8, output_path, "/") orelse std.mem.lastIndexOf(u8, output_path, "\\")) |idx| {
-        std.fs.cwd().makePath(output_path[0..idx]) catch {};
-    }
+    utils.ensureParentDir(output_path) catch {};
 
     {
         const file = std.fs.cwd().createFile(output_path, .{}) catch {
@@ -534,8 +477,8 @@ fn collectDirectoryWithExcludes(
             return CompressError.OutOfMemory;
         };
         // Check exclude patterns
-        if (matchesExcludePattern(relative, exclude_patterns)) continue;
-        if (matchesExcludePattern(entry.path, exclude_patterns)) continue;
+        if (utils.matchesPattern(relative, exclude_patterns)) continue;
+        if (utils.matchesPattern(entry.path, exclude_patterns)) continue;
 
         security.validatePath(relative) catch return CompressError.SecurityViolation;
         // Support large files - use platform-appropriate max (2GB on 32-bit, 4GB on 64-bit)

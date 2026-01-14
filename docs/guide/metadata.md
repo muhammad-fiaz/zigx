@@ -112,6 +112,23 @@ try metadata.set("git_commit", "abc123");
 try metadata.set("platform", "x86_64-linux");
 ```
 
+## Updating Metadata
+
+You can update metadata in an existing archive without extracting/re-compressing using the `manager` client-side API.
+
+```zig
+const manager = zigx.manager;
+
+// Define updates
+var updates = [_]manager.MetadataUpdate{
+    .{ .key = "version", .op = .{ .set = "1.0.1" } },
+    .{ .key = "temp", .op = .delete },
+};
+
+// Apply updates
+try manager.updateMetadata("archive.zigx", &updates, allocator);
+```
+
 ### Custom Application Data
 
 ```zig
@@ -192,3 +209,27 @@ pub fn main() !void {
 
 - [API Reference](/api/types) - Metadata type documentation
 - [Extracting](/guide/extracting) - Reading metadata from archives
+
+
+## Managing Metadata (CLI)
+
+You can manage metadata in existing archives using the `zigx` CLI tool:
+
+### View Metadata
+```bash
+# View all metadata
+zigx metadata archive.zigx get-all
+
+# View specific key
+zigx metadata archive.zigx get "version"
+```
+
+### Edit Metadata
+```bash
+# Set a new value
+zigx metadata archive.zigx set "build_id" "b123"
+
+# Delete a key
+zigx metadata archive.zigx delete "temp_key"
+```
+

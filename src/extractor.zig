@@ -5,6 +5,7 @@ const parser = @import("parser.zig");
 const security = @import("security.zig");
 const hash = @import("hash.zig");
 const compression = @import("compression.zig");
+const utils = @import("utils.zig");
 
 pub const ExtractionError = error{
     FileNotFound,
@@ -90,7 +91,7 @@ pub fn extractWithResult(options: ExtractOptions) ExtractionError!ExtractResult 
     };
     defer allocator.free(decompressed);
 
-    std.fs.cwd().makePath(options.output_dir) catch {
+    utils.ensurePath(options.output_dir) catch {
         return ExtractionError.CannotCreateDirectory;
     };
 
@@ -268,7 +269,7 @@ pub fn extractFile(
 
         if (std.mem.eql(u8, current_path, file_path)) {
             if (std.fs.path.dirname(output_path)) |dir| {
-                std.fs.cwd().makePath(dir) catch {
+                utils.ensurePath(dir) catch {
                     return ExtractionError.CannotCreateDirectory;
                 };
             }

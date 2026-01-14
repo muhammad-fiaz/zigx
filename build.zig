@@ -4,17 +4,41 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    // Resolve zstd dependency for standard builds
+    const zstd_dep = b.dependency("zstd", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    const zstd_mod = zstd_dep.module("zstd");
+
+    // Resolve zstd dependency for ReleaseFast builds (benchmark)
+    const zstd_dep_fast = b.dependency("zstd", .{
+        .target = target,
+        .optimize = .ReleaseFast,
+    });
+    const zstd_mod_fast = zstd_dep_fast.module("zstd");
+
     // Core library module
     const lib_mod = b.createModule(.{
         .root_source_file = b.path("src/zigx.zig"),
         .target = target,
         .optimize = optimize,
     });
+    lib_mod.addImport("zstd", zstd_mod);
+
+    // ReleaseFast library module for benchmarks
+    const lib_mod_fast = b.createModule(.{
+        .root_source_file = b.path("src/zigx.zig"),
+        .target = target,
+        .optimize = .ReleaseFast,
+    });
+    lib_mod_fast.addImport("zstd", zstd_mod_fast);
 
     // Export as dependency module
-    _ = b.addModule("zigx", .{
+    const exported_mod = b.addModule("zigx", .{
         .root_source_file = b.path("src/zigx.zig"),
     });
+    exported_mod.addImport("zstd", zstd_mod);
 
     // Unit tests
     const lib_unit_tests = b.addTest(.{ .root_module = lib_mod });
@@ -88,13 +112,16 @@ pub fn build(b: *std.Build) void {
     b.installArtifact(example);
 
     // API documentation
+    const docs_mod = b.createModule(.{
+        .root_source_file = b.path("src/zigx.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    docs_mod.addImport("zstd", zstd_mod);
+
     const lib_docs = b.addObject(.{
         .name = "zigx_docs",
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("src/zigx.zig"),
-            .target = target,
-            .optimize = optimize,
-        }),
+        .root_module = docs_mod,
     });
 
     const install_docs = b.addInstallDirectory(.{
@@ -105,13 +132,13 @@ pub fn build(b: *std.Build) void {
     const docs_step = b.step("docs", "Generate API documentation");
     docs_step.dependOn(&install_docs.step);
 
-    // Benchmark executable
+    // Benchmark executable - uses ReleaseFast lib module
     const bench_mod = b.createModule(.{
         .root_source_file = b.path("bench/benchmark.zig"),
         .target = target,
         .optimize = .ReleaseFast,
     });
-    bench_mod.addImport("zigx", lib_mod);
+    bench_mod.addImport("zigx", lib_mod_fast);
 
     const bench_exe = b.addExecutable(.{
         .name = "benchmark",

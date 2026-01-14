@@ -12,16 +12,16 @@ pub const CHUNK_SIZE = utils.CHUNK_SIZE;
 
 pub const CompressionType = enum(u4) {
     none = 0,
-    deflate = 1,
-    deflate_fast = 2,
-    deflate_best = 3,
+    zstd = 1,
+    zstd_fast = 2,
+    zstd_best = 3,
 
     pub fn fromLevel(level: config.CompressionLevel) CompressionType {
         return switch (level) {
             .none => .none,
-            .fast, .level_4, .level_5 => .deflate_fast,
-            .best, .level_8, .level_9 => .deflate_best,
-            else => .deflate,
+            .fast, .level_2 => .zstd_fast,
+            .best, .level_20, .level_21, .level_22 => .zstd_best,
+            else => .zstd,
         };
     }
 };
@@ -42,7 +42,7 @@ pub const FileType = enum(u8) {
 };
 
 pub const HeaderFlags = packed struct(u32) {
-    compression: u4 = @intFromEnum(CompressionType.deflate),
+    compression: u4 = @intFromEnum(CompressionType.zstd),
     signed: u1 = 0,
     encrypted: u1 = 0,
     chunked: u1 = 0,
@@ -460,22 +460,15 @@ pub fn detectFileType(path: []const u8, content: []const u8) FileType {
     return .unknown;
 }
 
-pub fn formatSize(size: u64) struct { value: f64, unit: []const u8 } {
-    if (size < 1024) return .{ .value = @floatFromInt(size), .unit = "B" };
-    if (size < 1024 * 1024) return .{ .value = @as(f64, @floatFromInt(size)) / 1024.0, .unit = "KB" };
-    if (size < 1024 * 1024 * 1024) return .{ .value = @as(f64, @floatFromInt(size)) / (1024.0 * 1024.0), .unit = "MB" };
-    return .{ .value = @as(f64, @floatFromInt(size)) / (1024.0 * 1024.0 * 1024.0), .unit = "GB" };
+pub fn formatSize(size: u64) utils.SizeUnit {
+    return utils.formatSize(size);
 }
 
 /// Convert bytes to hex string
 pub fn bytesToHex(bytes: []const u8) [64]u8 {
-    const hex_chars = "0123456789abcdef";
-    var result: [64]u8 = [_]u8{'0'} ** 64; // Initialize with zeros
-    const len = @min(bytes.len, 32);
-    for (0..len) |i| {
-        result[i * 2] = hex_chars[bytes[i] >> 4];
-        result[i * 2 + 1] = hex_chars[bytes[i] & 0x0F];
-    }
+    var result: [64]u8 = [_]u8{'0'} ** 64;
+    const len = if (bytes.len > 32) 32 else bytes.len;
+    utils.bytesToHex(bytes[0..len], result[0 .. len * 2]);
     return result;
 }
 

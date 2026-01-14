@@ -34,6 +34,17 @@ Complete API documentation for ZIGX.
 | [`validateDetailed`](/api/validate#validatedetailed) | `verifyDetailed` | Detailed validation |
 | [`detectCorruption`](/api/validate#detectcorruption) | - | Detect corruption type |
 
+### Management
+
+| Function | Alias | Description |
+|----------|-------|-------------|
+| [`manager.update`](/api/manager#update) | `update` | Add/remove files |
+| [`manager.repair`](/api/manager#repair) | `repair` | Repair corrupted archive |
+| [`manager.getMetadata`](/api/manager#metadata) | - | Get specific metadata value |
+| [`manager.getAllMetadata`](/api/manager#metadata) | - | Get all metadata |
+| [`manager.updateMetadata`](/api/manager#metadata) | - | Key-value CRUD for metadata |
+| [`manager.setSignature`](/api/manager#signing) | - | Sign an archive |
+
 ## Constants
 
 ```zig

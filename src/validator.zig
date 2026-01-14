@@ -100,6 +100,7 @@ pub fn validateDetailed(path: []const u8, allocator: Allocator) ValidationError!
                 .actual = null,
                 .file_path = null,
                 .recoverable = false,
+                .chunk_index = null,
             },
             .allocator = allocator,
         };
@@ -122,6 +123,7 @@ pub fn validateDetailed(path: []const u8, allocator: Allocator) ValidationError!
                 .actual = null,
                 .file_path = null,
                 .recoverable = false,
+                .chunk_index = null,
             },
             .allocator = allocator,
         };
@@ -186,6 +188,7 @@ pub fn validateDetailed(path: []const u8, allocator: Allocator) ValidationError!
             .actual = null,
             .file_path = null,
             .recoverable = true,
+            .chunk_index = null,
         } else null,
         .allocator = allocator,
     };
@@ -306,6 +309,7 @@ pub fn detectCorruption(path: []const u8, allocator: Allocator) !?CorruptionInfo
                 .actual = null,
                 .file_path = null,
                 .recoverable = false,
+                .chunk_index = null,
             },
             else => null,
         };
@@ -321,6 +325,7 @@ pub fn detectCorruption(path: []const u8, allocator: Allocator) !?CorruptionInfo
             .actual = null,
             .file_path = null,
             .recoverable = false,
+            .chunk_index = null,
         };
     };
 
@@ -332,6 +337,7 @@ pub fn detectCorruption(path: []const u8, allocator: Allocator) !?CorruptionInfo
             .actual = null,
             .file_path = null,
             .recoverable = false,
+            .chunk_index = null,
         };
     }
 
@@ -345,6 +351,7 @@ pub fn detectCorruption(path: []const u8, allocator: Allocator) !?CorruptionInfo
             .actual = null,
             .file_path = null,
             .recoverable = false,
+            .chunk_index = null,
         };
     }
 
@@ -356,6 +363,7 @@ pub fn detectCorruption(path: []const u8, allocator: Allocator) !?CorruptionInfo
             .actual = null,
             .file_path = null,
             .recoverable = false,
+            .chunk_index = null,
         };
     }
 
@@ -367,6 +375,7 @@ pub fn detectCorruption(path: []const u8, allocator: Allocator) !?CorruptionInfo
             .actual = null,
             .file_path = null,
             .recoverable = false,
+            .chunk_index = null,
         };
     }
 
@@ -379,6 +388,7 @@ pub fn detectCorruption(path: []const u8, allocator: Allocator) !?CorruptionInfo
             .actual = null,
             .file_path = null,
             .recoverable = false,
+            .chunk_index = null,
         };
     };
 
@@ -399,6 +409,7 @@ pub fn detectCorruption(path: []const u8, allocator: Allocator) !?CorruptionInfo
             .actual = null,
             .file_path = null,
             .recoverable = false,
+            .chunk_index = null,
         };
     };
 
@@ -410,6 +421,7 @@ pub fn detectCorruption(path: []const u8, allocator: Allocator) !?CorruptionInfo
             .actual = null,
             .file_path = null,
             .recoverable = false,
+            .chunk_index = null,
         };
     }
 
@@ -422,10 +434,11 @@ pub fn detectCorruption(path: []const u8, allocator: Allocator) !?CorruptionInfo
             .actual = null,
             .file_path = null,
             .recoverable = false,
+            .chunk_index = null,
         };
     }
 
-    _ = compression.decompress(compressed_payload, allocator) catch {
+    const decompressed = compression.decompress(compressed_payload, allocator) catch {
         return CorruptionInfo{
             .corruption_type = .decompression_failed,
             .offset = payload_offset,
@@ -433,8 +446,10 @@ pub fn detectCorruption(path: []const u8, allocator: Allocator) !?CorruptionInfo
             .actual = null,
             .file_path = null,
             .recoverable = false,
+            .chunk_index = null,
         };
     };
+    allocator.free(decompressed);
 
     return null;
 }

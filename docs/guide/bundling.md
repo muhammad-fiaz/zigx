@@ -29,6 +29,13 @@ defer result.deinit();
 
 ## Compression Levels
 
+| Level | Ratio (lower is better) | Speed | Use Case |
+|-------|-------|-------|----------|
+| BEST | ~30% | Slower | Distribution |
+| DEFAULT | ~28% | Balanced | General use |
+| FAST | ~34% | Fastest | Development |
+| STORE | 100% | Instant | Pre-compressed |
+
 ```zig
 .level = .best,    // Maximum compression (default)
 .level = .default, // Balanced

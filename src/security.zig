@@ -35,38 +35,11 @@ pub fn validatePath(path: []const u8) SecurityError!void {
     }
 }
 
-fn isAbsolutePath(path: []const u8) bool {
-    return utils.isAbsolutePath(path);
-}
-
-fn isAbsolutePathLocal(path: []const u8) bool {
-    if (path.len > 0 and path[0] == '/') return true;
-    if (path.len >= 2) {
-        if (std.ascii.isAlphabetic(path[0]) and path[1] == ':') return true;
-    }
-    if (path.len >= 2 and path[0] == '\\' and path[1] == '\\') return true;
-    return false;
-}
-
-fn containsPathTraversal(path: []const u8) bool {
-    var normalized: [MAX_PATH_LENGTH]u8 = undefined;
-    const len = @min(path.len, MAX_PATH_LENGTH);
-    for (path[0..len], 0..) |c, i| {
-        normalized[i] = if (c == '\\') '/' else c;
-    }
-    const norm_path = normalized[0..len];
-    if (std.mem.startsWith(u8, norm_path, "../")) return true;
-    if (std.mem.eql(u8, norm_path, "..")) return true;
-    if (std.mem.indexOf(u8, norm_path, "/../") != null) return true;
-    if (std.mem.endsWith(u8, norm_path, "/..")) return true;
-    return false;
-}
-
 pub fn validateSymlinkTarget(symlink_path: []const u8, target: []const u8, project_root: []const u8) SecurityError!void {
     _ = symlink_path;
     _ = project_root;
     try validatePath(target);
-    if (isAbsolutePath(target)) return SecurityError.SymlinkEscape;
+    if (utils.isAbsolutePath(target)) return SecurityError.SymlinkEscape;
     var depth: i32 = 0;
     var iter = std.mem.splitScalar(u8, target, '/');
     while (iter.next()) |component| {
@@ -101,20 +74,6 @@ pub const DuplicateTracker = struct {
         return self.paths.contains(path);
     }
 };
-
-pub fn normalizePath(allocator: Allocator, path: []const u8) Allocator.Error![]u8 {
-    var result = std.ArrayListUnmanaged(u8){};
-    errdefer result.deinit(allocator);
-    var iter = std.mem.splitScalar(u8, path, '/');
-    var first = true;
-    while (iter.next()) |component| {
-        if (component.len == 0 or std.mem.eql(u8, component, ".")) continue;
-        if (!first) try result.append(allocator, '/');
-        try result.appendSlice(allocator, component);
-        first = false;
-    }
-    return result.toOwnedSlice(allocator);
-}
 
 test "valid_paths" {
     try validatePath("src/main.zig");
@@ -154,10 +113,10 @@ test "duplicate_tracker" {
 
 test "normalize_path" {
     const allocator = std.testing.allocator;
-    const result1 = try normalizePath(allocator, "src//main.zig");
+    const result1 = try utils.normalizePath(allocator, "src//main.zig");
     defer allocator.free(result1);
     try std.testing.expectEqualStrings("src/main.zig", result1);
-    const result2 = try normalizePath(allocator, "./src/./utils/./file.zig");
+    const result2 = try utils.normalizePath(allocator, "./src/./utils/./file.zig");
     defer allocator.free(result2);
     try std.testing.expectEqualStrings("src/utils/file.zig", result2);
 }

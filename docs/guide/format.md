@@ -89,7 +89,7 @@ The payload starts with a compression header:
 
 | Version | Algorithm |
 |---------|-----------|
-| 1 | LZ77+RLE, 64KB window, lazy matching |
+| 1 | **Zstandard (zstd)** - levels 1-19, frame format with content size |
 
 ### File Entry Format
 
@@ -122,8 +122,12 @@ pub const FORMAT_VERSION: u16 = 0x0001;  // v1
 Tracks changes to the compression algorithm:
 
 ```zig
-pub const COMPRESSION_VERSION: u8 = 1;
+pub const COMPRESSION_VERSION: u8 = 1;  // Zstandard (zstd)
 ```
+
+| Version | Algorithm | Notes |
+|---------|-----------|-------|
+| 1 | **Zstandard (zstd)** | Current, levels 1-19 |
 
 This allows:
 - Algorithm updates without format changes
