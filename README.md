@@ -13,7 +13,7 @@
 <a href="https://github.com/muhammad-fiaz/zigx/releases/latest"><img src="https://img.shields.io/github/v/release/muhammad-fiaz/zigx?label=Latest%20Release&style=flat-square" alt="Latest Release"></a>
 <a href="https://pay.muhammadfiaz.com"><img src="https://img.shields.io/badge/Sponsor-pay.muhammadfiaz.com-ff69b4?style=flat&logo=heart" alt="Sponsor"></a>
 <a href="https://github.com/sponsors/muhammad-fiaz"><img src="https://img.shields.io/badge/Sponsor-pink?style=social&logo=github" alt="GitHub Sponsors"></a>
-<a href="https://hits.sh/muhammad-fiaz/zigx/"><img src="https://hits.sh/muhammad-fiaz/zigx.svg?label=Visitors&extraCount=0&color=green" alt="Repo Visitors"></a>
+<a href="https://hits.sh/github.com/muhammad-fiaz/zigx/"><img alt="Hits" src="https://hits.sh/github.com/muhammad-fiaz/zigx.svg"/></a>
 
 <p><em>Fast and light-weight compression file format for Zig.</em></p>
 

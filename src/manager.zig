@@ -473,11 +473,13 @@ fn extractForRepair(archive_path: []const u8, output_dir: []const u8, allocator:
         const checksum = archive.checksums.items[i];
 
         // Verify size bounds to prevent buffer overruns
-        if (offset + checksum.size > decompressed.len) {
+        // Cast checksum.size to usize for 32-bit platform compatibility
+        const file_size: usize = std.math.cast(usize, checksum.size) orelse break;
+        if (offset + file_size > decompressed.len) {
             break;
         }
 
-        const file_data = decompressed[offset .. offset + checksum.size];
+        const file_data = decompressed[offset .. offset + file_size];
         const file_path = checksum.path;
 
         // In repair mode, even if hash verification fails, we attempt to save the file
@@ -499,7 +501,7 @@ fn extractForRepair(archive_path: []const u8, output_dir: []const u8, allocator:
             // Invalid path detected, skipping file for security
         }
 
-        offset += checksum.size;
+        offset += file_size;
     }
 
     return count;
