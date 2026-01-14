@@ -94,7 +94,7 @@ export default defineConfig({
       },
       'softwareVersion': '0.0.1',
       'programmingLanguage': 'Zig',
-      'license': 'https://opensource.org/licenses/MIT'
+      'license': 'https://opensource.org/licenses/Apache-2.0'
     })],
     
     // JSON-LD Schema - TechArticle
@@ -207,7 +207,7 @@ export default defineConfig({
     ],
     
     footer: {
-      message: 'Released under the MIT License.',
+      message: 'Released under the Apache License 2.0.',
       copyright: 'Copyright © Muhammad Fiaz'
     },
     

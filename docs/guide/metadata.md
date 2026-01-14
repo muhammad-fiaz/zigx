@@ -89,7 +89,7 @@ try metadata.set("name", "my-app");
 try metadata.set("version", "2.0.0");
 try metadata.set("description", "My awesome application");
 try metadata.set("author", "John Doe");
-try metadata.set("license", "MIT");
+try metadata.set("license", "Apache-2.0");
 try metadata.set("homepage", "https://example.com");
 ```
 
@@ -157,7 +157,7 @@ pub fn main() !void {
     try metadata.set("name", "my-project");
     try metadata.set("version", "1.0.0");
     try metadata.set("author", "Development Team");
-    try metadata.set("license", "MIT");
+    try metadata.set("license", "Apache-2.0");
 
     // Build info
     const timestamp = std.time.timestamp();

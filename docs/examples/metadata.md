@@ -21,7 +21,7 @@ pub fn main() !void {
     try metadata.set("name", "my-project");
     try metadata.set("version", "1.0.0");
     try metadata.set("author", "Developer");
-    try metadata.set("license", "MIT");
+    try metadata.set("license", "Apache-2.0");
 
     // Create archive with metadata using bundle() alias
     _ = try zigx.bundle(.{
@@ -103,7 +103,7 @@ pub fn main() !void {
     try metadata.set("version", "2.0.0");
     try metadata.set("description", "An awesome application");
     try metadata.set("author", "Development Team");
-    try metadata.set("license", "MIT");
+    try metadata.set("license", "Apache-2.0");
     try metadata.set("homepage", "https://example.com");
 
     // Build info
