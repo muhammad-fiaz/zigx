@@ -17,6 +17,14 @@ pub const manager = @import("manager.zig");
 // Re-export config types
 pub const Config = config.Config;
 pub const CompressionLevel = config.CompressionLevel;
+pub const ConfigBuilder = config.ConfigBuilder;
+
+// Re-export compression types
+pub const CompressionStats = compression.CompressionStats;
+pub const ContentType = compression.ContentType;
+pub const AdvancedOptions = compression.AdvancedOptions;
+pub const Dictionary = compression.Dictionary;
+pub const CompressibilityAnalysis = compression.CompressibilityAnalysis;
 
 // Re-export format types
 pub const Header = format.Header;
@@ -32,17 +40,38 @@ pub const CorruptionType = format.CorruptionType;
 pub const CorruptionInfo = format.CorruptionInfo;
 pub const CompressionType = format.CompressionType;
 
+// Re-export bundler types
+pub const ProgressEvent = bundler.ProgressEvent;
+pub const ProgressInfo = bundler.ProgressInfo;
+pub const ProgressCallback = bundler.ProgressCallback;
+pub const OptionsBuilder = bundler.OptionsBuilder;
+
 // Re-export error types
 pub const CompressError = format.CompressError;
 pub const ParseError = parser.ParseError;
 pub const ValidationError = validator.ValidationError;
 pub const ExtractionError = extractor.ExtractionError;
+pub const CompressionError = compression.CompressionError;
 
 // Re-export result types
 pub const CompressResult = bundler.CompressResult;
 pub const CompressOptions = bundler.CompressOptions;
 pub const ExtractOptions = extractor.ExtractOptions;
 pub const ExtractResult = extractor.ExtractResult;
+pub const ExtractProgressEvent = extractor.ExtractProgressEvent;
+pub const ExtractProgressInfo = extractor.ExtractProgressInfo;
+pub const ExtractProgressCallback = extractor.ExtractProgressCallback;
+
+// Aliases for bundler/extractor options
+pub const BundleOptions = CompressOptions;
+pub const UnbundleOptions = ExtractOptions;
+pub const BundleResult = CompressResult;
+pub const UnbundleResult = ExtractResult;
+
+// Re-export utility types
+pub const SizeUnit = utils.SizeUnit;
+pub const ProgressTracker = utils.ProgressTracker;
+pub const BufferPool = utils.BufferPool;
 
 // Library Constants (from utils.zig)
 
@@ -275,8 +304,43 @@ pub fn compressData(data: []const u8, allocator: Allocator) ![]u8 {
     return compression.compress(data, allocator, null);
 }
 
+/// Compress data with adaptive level selection based on content type
+pub fn compressDataAdaptive(data: []const u8, allocator: Allocator) ![]u8 {
+    return compression.compressAdaptive(data, allocator);
+}
+
+/// Compress data with specific level
+pub fn compressDataWithLevel(data: []const u8, allocator: Allocator, level: CompressionLevel) ![]u8 {
+    return compression.compressAdvanced(data, allocator, level);
+}
+
+/// Compress data with full advanced options
+pub fn compressDataWithOptions(data: []const u8, allocator: Allocator, options: AdvancedOptions) ![]u8 {
+    return compression.compressWithOptions(data, allocator, options);
+}
+
 pub fn decompressData(data: []const u8, allocator: Allocator) ![]u8 {
     return compression.decompress(data, allocator);
+}
+
+/// Analyze data for compressibility
+pub fn analyzeCompressibility(data: []const u8) CompressibilityAnalysis {
+    return compression.analyzeCompressibility(data);
+}
+
+/// Detect content type from data
+pub fn detectContentType(data: []const u8) ContentType {
+    return ContentType.detect(data);
+}
+
+/// Get compression statistics
+pub fn getCompressionStats(original: []const u8, compressed: []const u8, level: CompressionLevel) CompressionStats {
+    return compression.getStats(original, compressed, level);
+}
+
+/// Estimate compression ratio without actually compressing
+pub fn estimateCompressionRatio(data: []const u8) f32 {
+    return compression.estimateRatio(data);
 }
 
 pub fn createMetadata(allocator: Allocator) Metadata {
@@ -291,6 +355,101 @@ pub fn detectFileType(path: []const u8, content: []const u8) FileType {
 pub fn formatSize(size: u64) struct { value: f64, unit: []const u8 } {
     const result = format.formatSize(size);
     return .{ .value = result.value, .unit = result.unit };
+}
+
+/// Get a configuration optimized for speed
+pub fn configFast() Config {
+    return config.fast();
+}
+
+/// Get a configuration optimized for best compression
+pub fn configBest() Config {
+    return config.best();
+}
+
+/// Get a configuration for ultra compression (maximum size reduction)
+pub fn configUltra() Config {
+    return config.ultra();
+}
+
+/// Get a balanced configuration (good speed and compression)
+pub fn configBalanced() Config {
+    return config.balanced();
+}
+
+/// Get a configuration with adaptive compression
+pub fn configAdaptive() Config {
+    return config.adaptive();
+}
+
+/// Get a configuration optimized for large files
+pub fn configForLargeFiles() Config {
+    return config.forLargeFiles();
+}
+
+/// Get a configuration for archiving (preserves metadata)
+pub fn configForArchiving() Config {
+    return config.forArchiving();
+}
+
+/// Get a configuration for distribution
+pub fn configForDistribution() Config {
+    return config.forDistribution();
+}
+
+/// Get uncompressed (store mode) configuration
+pub fn configUncompressed() Config {
+    return config.uncompressed();
+}
+
+/// Get a configuration with custom compression level (1-22)
+pub fn configWithLevel(level: u8) Config {
+    return config.withLevel(level);
+}
+
+/// Get a configuration with custom level and long-distance matching
+pub fn configWithLevelAndLdm(level: u8) Config {
+    return config.withLevelAndLdm(level);
+}
+
+/// Create a custom compression level (1-22)
+pub fn customLevel(level: u8) CompressionLevel {
+    return CompressionLevel.custom(level);
+}
+
+/// Reset global configuration to defaults
+pub fn resetConfig() void {
+    config.reset();
+}
+
+/// Create a config builder for custom configurations
+pub fn buildConfig() ConfigBuilder {
+    return ConfigBuilder.init();
+}
+
+/// Create compress options builder
+pub fn buildOptions(allocator: Allocator) OptionsBuilder {
+    return OptionsBuilder.init(allocator);
+}
+
+/// Get full version info string
+pub fn getVersionInfo(buf: []u8) []const u8 {
+    return utils.getFullVersionInfo(buf);
+}
+
+/// Check if a path matches any of the given patterns
+pub fn matchesPattern(path: []const u8, patterns: []const []const u8) bool {
+    return utils.matchesPattern(path, patterns);
+}
+
+/// Match path against glob pattern (supports ** for recursive matching)
+pub fn matchGlob(path: []const u8, pattern: []const u8) bool {
+    return utils.matchGlob(path, pattern);
+}
+
+/// Calculate CRC32 checksum
+pub fn crc32(data: []const u8) u32 {
+    return utils.crc32(data);
 }
 
 test "imports" {
@@ -334,6 +493,31 @@ test "compress_options_defaults" {
     try std.testing.expect(options.include == null);
     try std.testing.expect(options.files == null);
     try std.testing.expect(options.directories == null);
+}
+
+test "custom_level" {
+    // Test custom level creation
+    const level5 = customLevel(5);
+    try std.testing.expectEqual(@as(u8, 5), level5.toInt());
+
+    // Test clamping to max
+    const level_max = customLevel(100);
+    try std.testing.expectEqual(@as(u8, 22), level_max.toInt());
+
+    // Test level 0 maps to none
+    const level_none = customLevel(0);
+    try std.testing.expectEqual(@as(u8, 0), level_none.toInt());
+
+    // Test all valid levels 1-22
+    for (1..23) |i| {
+        const lvl = customLevel(@intCast(i));
+        try std.testing.expectEqual(@as(u8, @intCast(i)), lvl.toInt());
+    }
+}
+
+test "config_with_level" {
+    const cfg = configWithLevel(15);
+    try std.testing.expectEqual(@as(u8, 15), cfg.compression.level.toInt());
 }
 
 test "extract_options_defaults" {

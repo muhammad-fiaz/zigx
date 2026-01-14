@@ -31,7 +31,67 @@ pub fn main() !void {
 | `output_dir` | `[]const u8` | Output directory (required) |
 | `allocator` | `Allocator` | Memory allocator (required) |
 | `overwrite` | `bool` | Overwrite existing files |
-| `preserve_paths` | `bool` | Keep directory structure |
+| `validate` | `bool` | Verify checksums (default: true) |
+| `progress_callback` | `?ExtractProgressCallback` | Progress tracking |
+| `progress_context` | `?*anyopaque` | Callback context |
+
+## Progress Tracking
+
+Track extraction progress with detailed events:
+
+```zig
+fn onExtractProgress(info: zigx.ExtractProgressInfo, ctx: ?*anyopaque) void {
+    _ = ctx;
+    switch (info.event) {
+        .started => std.debug.print("Starting extraction...\n", .{}),
+        .reading_archive => std.debug.print("Reading archive header...\n", .{}),
+        .decompressing => std.debug.print("Decompressing payload...\n", .{}),
+        .extracting_file => {
+            if (info.current_file) |file| {
+                std.debug.print("\r[{d}/{d}] {d:.1}% - {s}", .{
+                    info.files_extracted,
+                    info.total_files,
+                    info.getPercent(),
+                    file,
+                });
+            }
+        },
+        .verifying => std.debug.print("\rVerifying checksums...", .{}),
+        .completed => std.debug.print("\nExtraction complete!\n", .{}),
+    }
+}
+
+try zigx.unbundle(.{
+    .archive_path = "bundle.zigx",
+    .output_dir = "extracted",
+    .allocator = allocator,
+    .progress_callback = onExtractProgress,
+    .progress_context = null,  // Optional context pointer
+});
+```
+
+### Progress Events
+
+| Event | Description |
+|-------|-------------|
+| `started` | Extraction operation started |
+| `reading_archive` | Reading archive header/metadata |
+| `decompressing` | Decompressing payload with zstd |
+| `extracting_file` | Writing a file to disk |
+| `verifying` | Verifying file checksums |
+| `completed` | Extraction finished |
+
+### Progress Info Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `event` | `ExtractProgressEvent` | Current operation |
+| `current_file` | `?[]const u8` | Current file path |
+| `files_extracted` | `usize` | Files completed |
+| `total_files` | `usize` | Total file count |
+| `bytes_written` | `u64` | Bytes written |
+| `total_bytes` | `u64` | Total bytes |
+| `getPercent()` | `f64` | Progress 0-100% |
 
 ## Extract with Result
 

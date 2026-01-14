@@ -29,13 +29,13 @@ features:
     details: SHA-256 checksums, CRC32 verification, and secure path handling.
     
   - title: Multiple Modes
-    details: BEST (zstd 19), DEFAULT (zstd 3), FAST (zstd 1), or STORE compression.
+    details: ULTRA (zstd 22), BEST (zstd 19), BALANCED (zstd 6), DEFAULT (zstd 3), FAST (zstd 1), or custom levels 1-22.
     
-  - title: Include/Exclude
-    details: Simple pattern matching to include or exclude files and directories.
+  - title: Progress Callbacks
+    details: Track bundling and extraction progress with detailed events for large archives.
     
   - title: Rich API
-    details: Easy-to-use API with function aliases for all operations.
+    details: Easy-to-use API with function aliases, OptionsBuilder fluent API, and preset configurations.
 
 ---
 
@@ -89,12 +89,15 @@ std.debug.print("Format: v{d}, Compression: v{d}\n", .{
 
 ## Compression Levels
 
-| Level | Ratio (lower is better) | Speed | Use Case |
-|-------|-------|-------|----------|
-| BEST | ~30% | Slower | Distribution |
-| DEFAULT | ~28% | Balanced | General use |
-| FAST | ~34% | Fastest | Development |
-| STORE | 100% | Instant | Pre-compressed |
+| Level | zstd | Ratio (lower=better) | Speed | Use Case |
+|-------|:----:|-------|-------|----------|
+| `.ultra` | 22 | ~17-22% | Slowest | Maximum compression |
+| `.best` | 19 | ~19-25% | Slow | Distribution |
+| `.balanced` | 6 | ~21-26% | Moderate | General purpose |
+| `.default` | 3 | ~21-28% | Balanced | Default |
+| `.fast` | 1 | ~25-33% | Fastest | Development |
+| `.none` | - | 100% | Instant | Pre-compressed |
+| `custom(n)` | 1-22 | Varies | Varies | Fine-grained control |
 
 ## Function Aliases
 

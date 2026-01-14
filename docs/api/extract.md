@@ -30,7 +30,43 @@ pub const ExtractOptions = struct {
     
     /// Overwrite existing files
     overwrite: bool = false,
+    
+    /// Progress callback for tracking extraction progress
+    progress_callback: ?ExtractProgressCallback = null,
+    
+    /// Context for progress callback
+    progress_context: ?*anyopaque = null,
 };
+```
+
+## Progress Callback Types
+
+```zig
+/// Progress event types for extraction operations
+pub const ExtractProgressEvent = enum {
+    started,          // Extraction started
+    reading_archive,  // Reading archive file
+    decompressing,    // Decompressing data
+    extracting_file,  // Extracting a file
+    verifying,        // Verifying checksums
+    completed,        // Extraction completed
+};
+
+/// Progress info for extraction callbacks
+pub const ExtractProgressInfo = struct {
+    event: ExtractProgressEvent,
+    current_file: ?[]const u8 = null,
+    files_extracted: usize = 0,
+    total_files: usize = 0,
+    bytes_written: u64 = 0,
+    total_bytes: u64 = 0,
+
+    /// Get progress percentage (0-100)
+    pub fn getPercent(self: *const ExtractProgressInfo) f64;
+};
+
+/// Progress callback function type for extraction
+pub const ExtractProgressCallback = *const fn (info: ExtractProgressInfo, context: ?*anyopaque) void;
 ```
 
 ## Result
@@ -75,6 +111,46 @@ std.debug.print("Extracted {d} files ({d} bytes)\n", .{
 });
 ```
 
+### With Progress Callback
+
+```zig
+fn onExtractProgress(info: zigx.ExtractProgressInfo, ctx: ?*anyopaque) void {
+    _ = ctx;
+    switch (info.event) {
+        .started => std.debug.print("Starting extraction...\n", .{}),
+        .extracting_file => {
+            std.debug.print("\r[{d}/{d}] {d:.1}% - {s}", .{
+                info.files_extracted,
+                info.total_files,
+                info.getPercent(),
+                info.current_file orelse "...",
+            });
+        },
+        .completed => std.debug.print("\nExtraction complete!\n", .{}),
+        else => {},
+    }
+}
+
+try zigx.unbundle(.{
+    .archive_path = "bundle.zigx",
+    .output_dir = "output",
+    .allocator = allocator,
+    .progress_callback = onExtractProgress,
+    .progress_context = null,
+});
+```
+
+### Progress Events
+
+| Event | Description |
+|-------|-------------|
+| `started` | Extraction started |
+| `reading_archive` | Reading archive header/metadata |
+| `decompressing` | Decompressing payload |
+| `extracting_file` | Writing a file to disk |
+| `verifying` | Verifying file checksums |
+| `completed` | Extraction completed |
+
 ## listFiles / list
 
 List files in archive without extracting.
@@ -97,6 +173,18 @@ for (files) |file| {
     std.debug.print("  {s}\n", .{file});
 }
 ```
+
+## Errors
+
+| Error | Description |
+|-------|-------------|
+| `FileNotFound` | Archive file not found |
+| `InvalidFormat` | Invalid ZIGX format |
+| `PathTraversal` | Path traversal attack detected |
+| `ChecksumMismatch` | File checksum verification failed |
+| `DecompressionFailed` | Decompression error |
+| `FileExists` | Output file exists (overwrite=false) |
+| `IoError` | Read/write error |
 
 ## Errors
 

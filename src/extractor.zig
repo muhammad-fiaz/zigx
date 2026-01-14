@@ -25,13 +25,48 @@ pub const ExtractionError = error{
     Corrupted,
 };
 
+/// Progress event types for extraction operations
+pub const ExtractProgressEvent = enum {
+    started,
+    reading_archive,
+    decompressing,
+    extracting_file,
+    verifying,
+    completed,
+};
+
+/// Progress info for extraction callbacks
+pub const ExtractProgressInfo = struct {
+    event: ExtractProgressEvent,
+    current_file: ?[]const u8 = null,
+    files_extracted: usize = 0,
+    total_files: usize = 0,
+    bytes_written: u64 = 0,
+    total_bytes: u64 = 0,
+
+    pub fn getPercent(self: *const ExtractProgressInfo) f64 {
+        if (self.total_files == 0) return 0;
+        return @as(f64, @floatFromInt(self.files_extracted)) / @as(f64, @floatFromInt(self.total_files)) * 100.0;
+    }
+};
+
+/// Progress callback function type for extraction
+pub const ExtractProgressCallback = *const fn (info: ExtractProgressInfo, context: ?*anyopaque) void;
+
 pub const ExtractOptions = struct {
     archive_path: []const u8,
     output_dir: []const u8,
     allocator: Allocator,
     validate: bool = true,
     overwrite: bool = false,
+    /// Progress callback for tracking extraction progress
+    progress_callback: ?ExtractProgressCallback = null,
+    /// Context for progress callback
+    progress_context: ?*anyopaque = null,
 };
+
+/// Alias for ExtractOptions
+pub const UnbundleOptions = ExtractOptions;
 
 pub const ExtractResult = struct {
     files_extracted: usize,
@@ -50,8 +85,16 @@ pub fn extract(options: ExtractOptions) ExtractionError!void {
     result.deinit();
 }
 
+/// Alias for extract()
+pub const unbundle = extract;
+
 pub fn extractWithResult(options: ExtractOptions) ExtractionError!ExtractResult {
     const allocator = options.allocator;
+
+    // Notify progress: started
+    if (options.progress_callback) |cb| {
+        cb(.{ .event = .started }, options.progress_context);
+    }
 
     var archive = parser.parse(options.archive_path, allocator) catch |err| {
         return switch (err) {
@@ -63,6 +106,11 @@ pub fn extractWithResult(options: ExtractOptions) ExtractionError!ExtractResult 
         };
     };
     defer archive.deinit();
+
+    // Notify progress: reading archive
+    if (options.progress_callback) |cb| {
+        cb(.{ .event = .reading_archive, .total_files = archive.checksums.items.len }, options.progress_context);
+    }
 
     const payload_offset = archive.getPayloadOffset();
     archive.file.seekTo(payload_offset) catch return ExtractionError.IoError;
@@ -80,10 +128,19 @@ pub fn extractWithResult(options: ExtractOptions) ExtractionError!ExtractResult 
     if (bytes_read < payload_len) return ExtractionError.UnexpectedEof;
 
     if (options.validate) {
+        // Notify progress: verifying
+        if (options.progress_callback) |cb| {
+            cb(.{ .event = .verifying }, options.progress_context);
+        }
         const actual_hash = hash.hashBytes(compressed);
         if (!std.mem.eql(u8, &actual_hash, &archive.header.payload_hash)) {
             return ExtractionError.PayloadHashMismatch;
         }
+    }
+
+    // Notify progress: decompressing
+    if (options.progress_callback) |cb| {
+        cb(.{ .event = .decompressing }, options.progress_context);
     }
 
     const decompressed = compression.decompress(compressed, allocator) catch {
@@ -188,6 +245,27 @@ pub fn extractWithResult(options: ExtractOptions) ExtractionError!ExtractResult 
             allocator.free(path_copy);
             return ExtractionError.OutOfMemory;
         };
+
+        // Notify progress: file extracted
+        if (options.progress_callback) |cb| {
+            cb(.{
+                .event = .extracting_file,
+                .current_file = file_path,
+                .files_extracted = extracted_files.items.len,
+                .total_files = archive.checksums.items.len,
+                .bytes_written = bytes_written,
+            }, options.progress_context);
+        }
+    }
+
+    // Notify progress: completed
+    if (options.progress_callback) |cb| {
+        cb(.{
+            .event = .completed,
+            .files_extracted = extracted_files.items.len,
+            .total_files = archive.checksums.items.len,
+            .bytes_written = bytes_written,
+        }, options.progress_context);
     }
 
     return ExtractResult{
@@ -197,6 +275,9 @@ pub fn extractWithResult(options: ExtractOptions) ExtractionError!ExtractResult 
         .allocator = allocator,
     };
 }
+
+/// Alias for extractWithResult()
+pub const unbundleWithResult = extractWithResult;
 
 pub fn extractFile(
     archive_path: []const u8,

@@ -20,6 +20,33 @@ pub const MAX_SINGLE_CHUNK_SIZE: u64 = utils.MAX_SINGLE_CHUNK_SIZE;
 /// Chunk size for large file processing (from utils)
 pub const LARGE_FILE_CHUNK_SIZE: usize = utils.CHUNK_SIZE;
 
+/// Progress event types for bundling operations
+pub const ProgressEvent = enum {
+    scanning,
+    reading_file,
+    compressing,
+    writing,
+    finalizing,
+};
+
+/// Progress info for callbacks
+pub const ProgressInfo = struct {
+    event: ProgressEvent,
+    current_file: ?[]const u8 = null,
+    files_processed: usize = 0,
+    total_files: usize = 0,
+    bytes_processed: u64 = 0,
+    total_bytes: u64 = 0,
+
+    pub fn getPercent(self: *const ProgressInfo) f64 {
+        if (self.total_bytes == 0) return 0;
+        return @as(f64, @floatFromInt(self.bytes_processed)) / @as(f64, @floatFromInt(self.total_bytes)) * 100.0;
+    }
+};
+
+/// Progress callback function type
+pub const ProgressCallback = *const fn (info: ProgressInfo, context: ?*anyopaque) void;
+
 pub const CompressResult = struct {
     output_path: []const u8,
     archive_size: u64,
@@ -29,6 +56,17 @@ pub const CompressResult = struct {
     allocator: Allocator,
     stats: format.ArchiveStats,
     compression_enabled: bool,
+    compression_level: config.CompressionLevel = .default,
+    content_types: ContentTypeSummary = .{},
+
+    pub const ContentTypeSummary = struct {
+        text: u32 = 0,
+        source_code: u32 = 0,
+        binary: u32 = 0,
+        image: u32 = 0,
+        archive: u32 = 0,
+        other: u32 = 0,
+    };
 
     pub fn deinit(self: *CompressResult) void {
         self.allocator.free(self.output_path);
@@ -41,6 +79,11 @@ pub const CompressResult = struct {
 
     pub fn getCompressionPercent(self: *const CompressResult) f64 {
         return (1.0 - self.getCompressionRatio()) * 100.0;
+    }
+
+    pub fn getSpaceSaved(self: *const CompressResult) u64 {
+        if (self.archive_size >= self.original_size) return 0;
+        return self.original_size - self.archive_size;
     }
 
     pub fn display(self: *const CompressResult, writer: anytype) !void {
@@ -65,6 +108,7 @@ pub const CompressResult = struct {
             var ratio_buf: [20]u8 = undefined;
             const ratio_str = std.fmt.bufPrint(&ratio_buf, "{d:.1}% saved", .{self.getCompressionPercent()}) catch "?";
             try writer.print("║ Compression:      {s:<34} ║\n", .{ratio_str});
+            try writer.print("║ Level:            {s:<34} ║\n", .{self.compression_level.name()});
         } else {
             try writer.print("║ Compression:      {s:<34} ║\n", .{"disabled (store mode)"});
         }
@@ -82,6 +126,16 @@ pub const CompressResult = struct {
         }
         try writer.print("─────────────────────────────────────────────────────────\n", .{});
         _ = self;
+    }
+
+    pub fn displayContentTypes(self: *const CompressResult, writer: anytype) !void {
+        try writer.print("Content types:\n", .{});
+        if (self.content_types.source_code > 0) try writer.print("  Source code: {d}\n", .{self.content_types.source_code});
+        if (self.content_types.text > 0) try writer.print("  Text files:  {d}\n", .{self.content_types.text});
+        if (self.content_types.binary > 0) try writer.print("  Binary:      {d}\n", .{self.content_types.binary});
+        if (self.content_types.image > 0) try writer.print("  Images:      {d}\n", .{self.content_types.image});
+        if (self.content_types.archive > 0) try writer.print("  Archives:    {d}\n", .{self.content_types.archive});
+        if (self.content_types.other > 0) try writer.print("  Other:       {d}\n", .{self.content_types.other});
     }
 };
 
@@ -115,6 +169,20 @@ pub const CompressOptions = struct {
     compress_checksums: bool = false,
     /// Use global config defaults
     use_global_config: bool = true,
+    /// Progress callback for tracking operation progress
+    progress_callback: ?ProgressCallback = null,
+    /// Context for progress callback
+    progress_context: ?*anyopaque = null,
+    /// Enable adaptive compression (auto-detect content type)
+    adaptive_compression: bool = false,
+    /// Enable long-distance matching for better compression
+    long_distance_matching: bool = false,
+    /// Include hidden files (starting with .)
+    include_hidden: bool = false,
+    /// Follow symbolic links
+    follow_symlinks: bool = false,
+    /// Dictionary for better compression of similar files
+    dictionary: ?*const compression.Dictionary = null,
 
     /// Apply global configuration defaults
     pub fn applyGlobalConfig(self: *CompressOptions) void {
@@ -124,7 +192,109 @@ pub const CompressOptions = struct {
             self.compress_metadata = config.global.compression.compress_metadata;
             self.compress_checksums = config.global.compression.compress_checksums;
             self.auto_metadata = config.global.bundling.auto_metadata;
+            self.adaptive_compression = config.global.compression.adaptive;
+            self.long_distance_matching = config.global.compression.long_distance_matching;
+            self.include_hidden = config.global.bundling.include_hidden;
+            self.follow_symlinks = config.global.bundling.follow_symlinks;
         }
+    }
+
+    /// Create options from a preset configuration
+    pub fn fromConfig(cfg: config.Config, allocator: Allocator) CompressOptions {
+        return .{
+            .allocator = allocator,
+            .level = cfg.compression.level,
+            .compression_enabled = cfg.compression.enabled,
+            .compress_metadata = cfg.compression.compress_metadata,
+            .compress_checksums = cfg.compression.compress_checksums,
+            .auto_metadata = cfg.bundling.auto_metadata,
+            .adaptive_compression = cfg.compression.adaptive,
+            .long_distance_matching = cfg.compression.long_distance_matching,
+            .include_hidden = cfg.bundling.include_hidden,
+            .follow_symlinks = cfg.bundling.follow_symlinks,
+            .use_global_config = false,
+        };
+    }
+
+    /// Builder pattern for creating options
+    pub fn builder(allocator: Allocator) OptionsBuilder {
+        return OptionsBuilder.init(allocator);
+    }
+};
+
+/// Builder for creating CompressOptions
+pub const OptionsBuilder = struct {
+    opts: CompressOptions,
+
+    pub fn init(allocator: Allocator) OptionsBuilder {
+        return .{
+            .opts = .{ .allocator = allocator, .use_global_config = false },
+        };
+    }
+
+    pub fn include(self: *OptionsBuilder, paths: []const []const u8) *OptionsBuilder {
+        self.opts.include = paths;
+        return self;
+    }
+
+    pub fn exclude(self: *OptionsBuilder, patterns: []const []const u8) *OptionsBuilder {
+        self.opts.exclude = patterns;
+        return self;
+    }
+
+    pub fn outputPath(self: *OptionsBuilder, path: []const u8) *OptionsBuilder {
+        self.opts.output_path = path;
+        return self;
+    }
+
+    pub fn level(self: *OptionsBuilder, lvl: config.CompressionLevel) *OptionsBuilder {
+        self.opts.level = lvl;
+        return self;
+    }
+
+    /// Set a custom compression level (1-22)
+    pub fn customLevel(self: *OptionsBuilder, lvl: u8) *OptionsBuilder {
+        self.opts.level = config.CompressionLevel.custom(lvl);
+        return self;
+    }
+
+    /// Use ultra compression (level 22)
+    pub fn ultra(self: *OptionsBuilder) *OptionsBuilder {
+        self.opts.level = config.CompressionLevel.ultra;
+        return self;
+    }
+
+    /// Use best compression (level 19)
+    pub fn best(self: *OptionsBuilder) *OptionsBuilder {
+        self.opts.level = .best;
+        return self;
+    }
+
+    /// Use fast compression (level 1)
+    pub fn fast(self: *OptionsBuilder) *OptionsBuilder {
+        self.opts.level = .fast;
+        return self;
+    }
+
+    /// Use balanced compression (level 6)
+    pub fn balanced(self: *OptionsBuilder) *OptionsBuilder {
+        self.opts.level = config.CompressionLevel.balanced;
+        return self;
+    }
+
+    pub fn adaptive(self: *OptionsBuilder, enable: bool) *OptionsBuilder {
+        self.opts.adaptive_compression = enable;
+        return self;
+    }
+
+    pub fn progress(self: *OptionsBuilder, callback: ProgressCallback, context: ?*anyopaque) *OptionsBuilder {
+        self.opts.progress_callback = callback;
+        self.opts.progress_context = context;
+        return self;
+    }
+
+    pub fn build(self: *OptionsBuilder) CompressOptions {
+        return self.opts;
     }
 };
 

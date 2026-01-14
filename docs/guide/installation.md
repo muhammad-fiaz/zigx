@@ -4,7 +4,7 @@ This guide covers different ways to install ZIGX in your Zig project.
 
 ## Requirements
 
-- **Zig**: Version 0.14.0 or later (0.15.x recommended)
+- **Zig**: Version 0.15.0 or later (0.15.x recommended)
 - **Platform**: Windows, macOS, or Linux
 
 ## Using Zig Package Manager (Recommended)
@@ -131,7 +131,7 @@ Ensure the path in `root_source_file` is correct:
 
 ### Zig Version Compatibility
 
-ZIGX 0.0.1 requires Zig 0.14.0+. Check your version:
+ZIGX 0.0.1 requires Zig 0.15.0+. Check your version:
 
 ```bash
 zig version
