@@ -19,17 +19,17 @@ hero:
       link: https://github.com/muhammad-fiaz/zigx
 
 features:
-  - title: High Performance
-    details: Optimized LZ77+RLE hybrid algorithm with 64KB sliding window and lazy matching.
+  - title: Zstandard Compression
+    details: Industry-leading zstd compression via Zig bindings - 80%+ space savings on typical data.
     
-  - title: Versioned Format
-    details: Format v1 with compression versioning ensures future compatibility.
+  - title: Blazing Fast
+    details: 94+ MB/s compression, 122+ MB/s decompression. Up to 99.9% compression on repetitive data.
     
   - title: Security First
     details: SHA-256 checksums, CRC32 verification, and secure path handling.
     
   - title: Multiple Modes
-    details: BEST, DEFAULT, FAST, or STORE compression based on your needs.
+    details: BEST (zstd 19), DEFAULT (zstd 3), FAST (zstd 1), or STORE compression.
     
   - title: Include/Exclude
     details: Simple pattern matching to include or exclude files and directories.
@@ -38,6 +38,30 @@ features:
     details: Easy-to-use API with function aliases for all operations.
 
 ---
+
+::: info
+ZIGX is a new file format specifically designed for Zig distribution packages, but it can also be used as a compressed file format for any other projects.
+:::
+
+## Installation
+
+### Release Installation (Recommended)
+
+Install the latest stable release (v0.0.1):
+
+```bash
+zig fetch --save https://github.com/muhammad-fiaz/zigx/archive/refs/tags/v0.0.1.tar.gz
+```
+
+### Configure build.zig
+
+```zig
+const zigx_dep = b.dependency("zigx", .{
+    .target = target,
+    .optimize = optimize,
+});
+exe.root_module.addImport("zigx", zigx_dep.module("zigx"));
+```
 
 ## Quick Start
 
@@ -65,7 +89,7 @@ std.debug.print("Format: v{d}, Compression: v{d}\n", .{
 
 ## Compression Levels
 
-| Level | Ratio | Speed | Use Case |
+| Level | Ratio (lower is better) | Speed | Use Case |
 |-------|-------|-------|----------|
 | BEST | ~30% | Slower | Distribution |
 | DEFAULT | ~28% | Balanced | General use |

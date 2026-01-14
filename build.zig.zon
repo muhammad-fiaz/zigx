@@ -3,7 +3,12 @@
     .version = "0.0.1",
     .minimum_zig_version = "0.15.0",
     .fingerprint = 0x16a26b25af4f5bbe,
-    .dependencies = .{},
+    .dependencies = .{
+        .zstd = .{
+            .url = "git+https://github.com/muhammad-fiaz/zstd.zig.git#918ee9d38aca1e75a07a7cde1f9ff80d0acb2839",
+            .hash = "zstd-1.6.0-biH4jEeJMgCzNWKLVuljak847bwgE9p7AaPebhBgF5L2",
+        },
+    },
     .paths = .{
         "build.zig",
         "build.zig.zon",

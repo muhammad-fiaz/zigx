@@ -16,7 +16,7 @@ pub const MAGIC: [4]u8 = .{ 'Z', 'I', 'G', 'X' };
 /// Format version (archive structure version)
 pub const FORMAT_VERSION: u16 = 0x0001;
 
-/// Compression algorithm version
+/// Compression algorithm version (1 = Zstandard)
 pub const COMPRESSION_VERSION: u8 = 1;
 
 /// Header size in bytes
@@ -98,6 +98,26 @@ pub fn hexToBytes(hex: []const u8, out: []u8) !void {
         const high = hexCharToNibble(hex[i * 2]) orelse return error.InvalidHexCharacter;
         const low = hexCharToNibble(hex[i * 2 + 1]) orelse return error.InvalidHexCharacter;
         out[i] = (@as(u8, high) << 4) | @as(u8, low);
+    }
+}
+
+// Filesystem Utilities
+
+/// Create directory path if it doesn't exist
+pub fn ensurePath(path: []const u8) !void {
+    if (path.len > 0) {
+        try std.fs.cwd().makePath(path);
+    }
+}
+
+/// Create parent directory for a file path
+/// Handles both forward and backward slashes
+pub fn ensureParentDir(path: []const u8) !void {
+    if (std.mem.lastIndexOf(u8, path, "/") orelse std.mem.lastIndexOf(u8, path, "\\")) |idx| {
+        const dir = path[0..idx];
+        if (dir.len > 0) {
+            try ensurePath(dir);
+        }
     }
 }
 

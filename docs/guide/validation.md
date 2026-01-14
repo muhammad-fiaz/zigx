@@ -103,6 +103,13 @@ pub fn validateArchive(path: []const u8, allocator: Allocator) !void {
 }
 ```
 
+## Repairing Corruption
+
+If validation fails, you can attempt to repair the archive using the repair tools.
+
+- [Repair Guide](/guide/repair-and-update)
+- `zigx repair` command
+
 ## Best Practices
 
 1. **Always validate before extraction**

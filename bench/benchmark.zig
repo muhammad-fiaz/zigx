@@ -7,6 +7,7 @@ const CompressionLevel = zigx.CompressionLevel;
 /// Benchmark results structure with all dynamic data
 const BenchmarkResult = struct {
     name: []const u8,
+    format: []const u8,
     original_size: u64,
     compressed_size: u64,
     compression_ratio: f64,
@@ -18,7 +19,7 @@ const BenchmarkResult = struct {
     category: []const u8,
 
     const categories = [_][]const u8{
-        "ZIGX Compression Levels",
+        "All Compression Levels (zstd 0-22)",
         "File Type Performance",
         "Scalability Test",
     };
@@ -83,8 +84,8 @@ fn generateTestData(allocator: std.mem.Allocator, size: usize, data_type: enum {
     return data;
 }
 
-/// Run compression benchmark with accurate timing
-fn runCompressionBenchmark(
+/// Run ZIGX compression benchmark with accurate timing
+fn runZigxBenchmark(
     allocator: std.mem.Allocator,
     data: []const u8,
     level: CompressionLevel,
@@ -98,28 +99,23 @@ fn runCompressionBenchmark(
 
     // Warmup run (not timed)
     {
-        const result = try zigx.compression.compressAdvanced(data, allocator, level);
-        defer allocator.free(result);
-        const decompressed = try zigx.compression.decompress(result, allocator);
-        defer allocator.free(decompressed);
+        const warmup = try zigx.compression.compress(data, allocator, level);
+        defer allocator.free(warmup);
     }
 
     // Benchmark iterations
     for (0..ITERATIONS) |_| {
         var timer = try std.time.Timer.start();
-
-        const result = try zigx.compression.compressAdvanced(data, allocator, level);
-        defer allocator.free(result);
-
+        const compressed = try zigx.compression.compress(data, allocator, level);
         total_compress_time += timer.read();
-        compressed_size = result.len;
+        compressed_size = compressed.len;
 
-        // Benchmark decompression
         timer.reset();
-        const decompressed = try zigx.compression.decompress(result, allocator);
-        defer allocator.free(decompressed);
-
+        const decompressed = try zigx.compression.decompress(compressed, allocator);
         total_decompress_time += timer.read();
+
+        allocator.free(compressed);
+        allocator.free(decompressed);
     }
 
     const avg_compress_time = total_compress_time / ITERATIONS;
@@ -128,8 +124,8 @@ fn runCompressionBenchmark(
     const original_size_f: f64 = @floatFromInt(data.len);
     const compressed_size_f: f64 = @floatFromInt(compressed_size);
 
-    // Calculate metrics
-    const compression_ratio = if (compressed_size > 0) (1.0 - compressed_size_f / original_size_f) * 100.0 else 0.0;
+    // Calculate metrics - saved % is (1 - compressed/original) * 100 (higher = better compression)
+    const compression_ratio = if (original_size_f > 0) (1.0 - compressed_size_f / original_size_f) * 100.0 else 0.0;
     const compress_speed = if (avg_compress_time > 0)
         original_size_f / (@as(f64, @floatFromInt(avg_compress_time)) / 1_000_000_000.0) / (1024.0 * 1024.0)
     else
@@ -141,6 +137,7 @@ fn runCompressionBenchmark(
 
     return BenchmarkResult{
         .name = name,
+        .format = "ZIGX (.zigx)",
         .original_size = data.len,
         .compressed_size = compressed_size,
         .compression_ratio = compression_ratio,
@@ -153,7 +150,7 @@ fn runCompressionBenchmark(
     };
 }
 
-/// Print results to console
+/// Print results to console with proper table formatting
 fn printResults(results: []const BenchmarkResult) void {
     std.debug.print("\n", .{});
     std.debug.print("=" ** 120, .{});
@@ -175,21 +172,33 @@ fn printResults(results: []const BenchmarkResult) void {
         std.debug.print("[{s}]\n", .{cat});
         std.debug.print("-" ** 120, .{});
         std.debug.print("\n", .{});
-        std.debug.print("{s:<35} {s:>12} {s:>12} {s:>10} {s:>12} {s:>12} {s:>15}\n", .{
+
+        // Header row - clear column names
+        std.debug.print("{s:<28} {s:>10} {s:>10} {s:>12} {s:>10} {s:>10} {s:<18}\n", .{
             "Benchmark",
             "Original",
-            "Compressed",
-            "Ratio",
+            "Output",
+            "Compressed%",
             "Comp MB/s",
             "Decomp MB/s",
             "Notes",
+        });
+        // Sub-header showing direction (lower/higher = better)
+        std.debug.print("{s:<28} {s:>10} {s:>10} {s:>12} {s:>10} {s:>10} {s:<18}\n", .{
+            "",
+            "(bytes)",
+            "(lower)",
+            "(higher)",
+            "(higher)",
+            "(higher)",
+            "",
         });
         std.debug.print("-" ** 120, .{});
         std.debug.print("\n", .{});
 
         for (results) |r| {
             if (std.mem.eql(u8, r.category, cat)) {
-                std.debug.print("{s:<35} {d:>12} {d:>12} {d:>9.1}% {d:>12.1} {d:>12.1} {s:>15}\n", .{
+                std.debug.print("{s:<28} {d:>10} {d:>10} {d:>11.1}% {d:>10.1} {d:>10.1}   {s:<18}\n", .{
                     r.name,
                     r.original_size,
                     r.compressed_size,
@@ -225,7 +234,7 @@ fn calculateStats(results: []const BenchmarkResult) struct {
     var total_original: u64 = 0;
     var total_compressed: u64 = 0;
 
-    var best_ratio: f64 = -1000;
+    var best_ratio: f64 = -1000; // Start low since higher saved % = better
     var best_ratio_name: []const u8 = "";
     var best_compress_speed: f64 = 0;
     var best_compress_name: []const u8 = "";
@@ -240,6 +249,7 @@ fn calculateStats(results: []const BenchmarkResult) struct {
         total_compressed += r.compressed_size;
         count += 1;
 
+        // Higher saved % = better compression, so find maximum
         if (r.compression_ratio > best_ratio) {
             best_ratio = r.compression_ratio;
             best_ratio_name = r.name;
@@ -293,7 +303,7 @@ fn writeMarkdownReport(results: []const BenchmarkResult, allocator: std.mem.Allo
         \\- **Benchmark Iterations:** {d}
         \\- **ZIGX Version:** {s}
         \\- **Format Version:** 0x{X:0>4}
-        \\- **Compression Algorithm:** LZ77+RLE v{d}
+        \\- **Compression Algorithm:** Zstandard (zstd) v{d}
         \\
         \\
     , .{
@@ -304,25 +314,15 @@ fn writeMarkdownReport(results: []const BenchmarkResult, allocator: std.mem.Allo
         ITERATIONS,
         zigx.VERSION,
         zigx.FORMAT_VERSION,
-        zigx.COMPRESSION_VERSION,
+        zigx.compression.VERSION,
     }) catch "";
     _ = try file.write(env_info);
 
-    // Dynamic algorithm description
-    _ = try file.write("## Compression Algorithm\n\n");
-    _ = try file.write("ZIGX uses a hybrid compression approach:\n\n");
-
-    const algo_info = std.fmt.bufPrint(&buf,
-        \\- **Window Size:** 64 KB (LZ77 sliding window)
-        \\- **Hash Chain:** 32 KB (match finding acceleration)
-        \\- **Minimum Match:** 3 bytes
-        \\- **Maximum Match:** 258 bytes
-        \\- **Checksum:** SHA-256 for integrity verification
-        \\- **Header Size:** {d} bytes
-        \\
-        \\
-    , .{zigx.HEADER_SIZE}) catch "";
-    _ = try file.write(algo_info);
+    // Algorithm description
+    _ = try file.write("## Algorithm\n\n");
+    _ = try file.write("| Format | Algorithm | Implementation | Dependencies |\n");
+    _ = try file.write("|:-------|:----------|:---------------|:-------------|\n");
+    _ = try file.write("| **ZIGX (.zigx)** | Zstandard (zstd) | zstd.zig (C bindings) | zstd C library |\n\n");
 
     // Results by category (fully dynamic)
     for (BenchmarkResult.categories) |cat| {
@@ -339,8 +339,9 @@ fn writeMarkdownReport(results: []const BenchmarkResult, allocator: std.mem.Allo
         defer allocator.free(cat_header);
         _ = try file.write(cat_header);
 
-        _ = try file.write("| Benchmark | Original | Compressed | Ratio | Comp Speed | Decomp Speed | Notes |\n");
-        _ = try file.write("|:----------|----------:|-----------:|------:|-----------:|-------------:|:------|\n");
+        _ = try file.write("| Benchmark | Original | Output | Compressed % | Comp Speed | Decomp Speed | Notes |\n");
+        _ = try file.write("|:----------|----------:|-------:|-------------:|-----------:|-------------:|:------|\n");
+        _ = try file.write("| | *(bytes)* | *(lower=better)* | *(higher=better)* | *(higher=better)* | *(higher=better)* | |\n");
 
         for (results) |r| {
             if (std.mem.eql(u8, r.category, cat)) {
@@ -359,24 +360,25 @@ fn writeMarkdownReport(results: []const BenchmarkResult, allocator: std.mem.Allo
         }
     }
 
-    // Dynamic performance summary
-    _ = try file.write("\n## Performance Summary\n\n");
+    // Performance summary
+    _ = try file.write("\n## ZIGX Performance Summary\n\n");
 
     var summary_buf: [1024]u8 = undefined;
     const summary = std.fmt.bufPrint(&summary_buf,
         \\| Metric | Value | Best Performer |
         \\|:-------|------:|:---------------|
-        \\| Average Compression Ratio | {d:.1}% | {s} ({d:.1}%) |
+        \\| Best Compressed % | {d:.1}% | {s} |
+        \\| Average Compressed % | {d:.1}% | - |
         \\| Average Compression Speed | {d:.1} MB/s | {s} ({d:.1} MB/s) |
         \\| Average Decompression Speed | {d:.1} MB/s | {s} ({d:.1} MB/s) |
         \\| Total Data Processed | {d} bytes | - |
-        \\| Total Compressed Size | {d} bytes | - |
+        \\| Total Output Size | {d} bytes | - |
         \\
         \\
     , .{
-        stats.avg_ratio,
-        stats.best_ratio_name,
         stats.best_ratio,
+        stats.best_ratio_name,
+        stats.avg_ratio,
         stats.avg_compress_speed,
         stats.best_compress_name,
         stats.best_compress_speed,
@@ -388,89 +390,48 @@ fn writeMarkdownReport(results: []const BenchmarkResult, allocator: std.mem.Allo
     }) catch "";
     _ = try file.write(summary);
 
-    // Dynamic format comparison based on measured results
-    _ = try file.write("\n## Format Comparison (Measured vs Industry Standards)\n\n");
-    _ = try file.write("Based on the benchmark results, here's how ZIGX compares:\n\n");
-    _ = try file.write("| Format | ZIGX Measured | Industry Typical | Speed Class | Dependencies |\n");
-    _ = try file.write("|:-------|-------------:|:-----------------|:------------|:-------------|\n");
+    // Key features
+    _ = try file.write("\n## Key Features of ZIGX\n\n");
 
-    // Calculate ZIGX measured values dynamically
-    var zigx_text_ratio: f64 = 0;
-    var text_count: usize = 0;
-
-    for (results) |r| {
-        if (std.mem.indexOf(u8, r.name, "Text") != null or
-            std.mem.indexOf(u8, r.name, "text") != null or
-            std.mem.indexOf(u8, r.name, "BEST") != null or
-            std.mem.indexOf(u8, r.name, "DEFAULT") != null)
-        {
-            zigx_text_ratio += r.compression_ratio;
-            text_count += 1;
-        }
-    }
-    if (text_count > 0) {
-        zigx_text_ratio /= @floatFromInt(text_count);
-    }
-
-    // Dynamic comparison table row for ZIGX
-    var comp_buf: [256]u8 = undefined;
-    const zigx_row = std.fmt.bufPrint(&comp_buf, "| **ZIGX (.zigx)** | {d:.1}% | {d:.0}-{d:.0}% | {d:.0} MB/s | None (Pure Zig) |\n", .{
-        stats.avg_ratio,
-        @max(0, stats.avg_ratio - 10),
-        stats.best_ratio,
-        stats.avg_compress_speed,
-    }) catch "";
-    _ = try file.write(zigx_row);
-
-    // Reference formats
-    _ = try file.write("| ZIP (.zip) | - | 60-70% | Medium | zlib |\n");
-    _ = try file.write("| GZIP (.tar.gz) | - | 60-70% | Medium | zlib |\n");
-    _ = try file.write("| 7-Zip (.7z) | - | 70-80% | Slow | lzma |\n");
-    _ = try file.write("| LZ4 (.lz4) | - | 50-60% | Very Fast | lz4 |\n");
-    _ = try file.write("| Zstd (.zst) | - | 65-75% | Fast | zstd |\n\n");
-
-    // Dynamic key advantages based on measured performance
-    _ = try file.write("## Key Advantages of ZIGX\n\n");
-
-    const advantages = std.fmt.bufPrint(&summary_buf,
-        \\Based on the measured benchmark results:
-        \\
-        \\1. **Zero Dependencies** - Pure Zig implementation, no external libraries
-        \\2. **Cross-Platform** - Tested on {s}/{s}, supports all Zig platforms
-        \\3. **Fast Decompression** - {d:.1} MB/s average decompression speed
-        \\4. **Competitive Ratio** - {d:.1}% average, up to {d:.1}% on optimal data
-        \\5. **Security** - SHA-256 checksums for payload verification
-        \\6. **Compact Format** - Only {d} bytes header overhead
-        \\7. **Versioned** - Format v0x{X:0>4} for compatibility
+    const features = std.fmt.bufPrint(&summary_buf,
+        \\1. **Zstandard Compression** - Industry-leading zstd algorithm via Zig bindings
+        \\2. **Excellent on Repetitive Data** - {d:.1}% compressed on log files (best case)
+        \\3. **Fast Compression** - {d:.1} MB/s average compression speed
+        \\4. **Fast Decompression** - {d:.1} MB/s average decompression speed
+        \\5. **Cross-Platform** - Tested on {s}/{s}, supports all Zig platforms
+        \\6. **Security** - SHA-256 checksums for payload verification
+        \\7. **Compact Format** - Only {d} bytes header overhead
+        \\8. **Versioned** - Format v0x{X:0>4} for compatibility
         \\
         \\
     , .{
+        stats.best_ratio,
+        stats.avg_compress_speed,
+        stats.avg_decompress_speed,
         @tagName(builtin.os.tag),
         @tagName(builtin.cpu.arch),
-        stats.avg_decompress_speed,
-        stats.avg_ratio,
-        stats.best_ratio,
         zigx.HEADER_SIZE,
         zigx.FORMAT_VERSION,
     }) catch "";
-    _ = try file.write(advantages);
+    _ = try file.write(features);
 
-    // Dynamic conclusion
+    // Conclusion
     _ = try file.write("## Conclusion\n\n");
 
     const conclusion = std.fmt.bufPrint(&summary_buf,
-        \\ZIGX achieved **{d:.1}%** average compression ratio with **{d:.1} MB/s** compression
-        \\and **{d:.1} MB/s** decompression speeds on {s} {s}.
+        \\ZIGX achieved **{d:.1}%** best compression with **{d:.1} MB/s** average compression
+        \\and **{d:.1} MB/s** average decompression speeds on {s} {s}.
         \\
-        \\Best compression: **{d:.1}%** on "{s}"
-        \\Fastest compression: **{d:.1} MB/s** on "{s}"
-        \\Fastest decompression: **{d:.1} MB/s** on "{s}"
+        \\- **Best compression:** {d:.1}% compressed on "{s}"
+        \\- **Fastest compression:** {d:.1} MB/s on "{s}"
+        \\- **Fastest decompression:** {d:.1} MB/s on "{s}"
         \\
-        \\The pure Zig implementation ensures portability across all platforms without external dependencies.
+        \\ZIGX uses Zstandard (zstd) compression via Zig bindings, providing excellent compression
+        \\especially on repetitive data (log files, configs) with fast compression speeds.
         \\
         \\
     , .{
-        stats.avg_ratio,
+        stats.best_ratio,
         stats.avg_compress_speed,
         stats.avg_decompress_speed,
         @tagName(builtin.os.tag),
@@ -493,7 +454,7 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    var results: std.ArrayList(BenchmarkResult) = .{};
+    var results: std.ArrayListUnmanaged(BenchmarkResult) = .empty;
     defer results.deinit(allocator);
 
     std.debug.print("ZIGX Compression Benchmark\n", .{});
@@ -528,49 +489,247 @@ pub fn main() !void {
     const mixed_data = try generateTestData(allocator, MEDIUM_SIZE, .mixed);
     defer allocator.free(mixed_data);
 
-    // Category: ZIGX Compression Levels
-    std.debug.print("Running compression level benchmarks...\n", .{});
+    // ========================================
+    // Category: All Compression Levels (zstd 0-22)
+    // ========================================
+    std.debug.print("Running compression level benchmarks (all zstd levels 0-22)...\n", .{});
 
-    try results.append(allocator, try runCompressionBenchmark(
-        allocator,
-        text_data_medium,
-        .best,
-        "ZIGX BEST (64KB text)",
-        "Max compression",
-        "ZIGX Compression Levels",
-    ));
-
-    try results.append(allocator, try runCompressionBenchmark(
-        allocator,
-        text_data_medium,
-        .default,
-        "ZIGX DEFAULT (64KB text)",
-        "Balanced",
-        "ZIGX Compression Levels",
-    ));
-
-    try results.append(allocator, try runCompressionBenchmark(
-        allocator,
-        text_data_medium,
-        .fast,
-        "ZIGX FAST (64KB text)",
-        "Speed priority",
-        "ZIGX Compression Levels",
-    ));
-
-    try results.append(allocator, try runCompressionBenchmark(
+    // Level 0 - No compression (store)
+    try results.append(allocator, try runZigxBenchmark(
         allocator,
         text_data_medium,
         .none,
-        "ZIGX STORE (64KB text)",
-        "No compression",
-        "ZIGX Compression Levels",
+        "ZIGX Level 0 (64KB text)",
+        "zstd 0 (store)",
+        "All Compression Levels (zstd 0-22)",
     ));
 
+    // Level 1 - Fast
+    try results.append(allocator, try runZigxBenchmark(
+        allocator,
+        text_data_medium,
+        .fast,
+        "ZIGX Level 1 (64KB text)",
+        "zstd 1 (fast)",
+        "All Compression Levels (zstd 0-22)",
+    ));
+
+    // Level 2
+    try results.append(allocator, try runZigxBenchmark(
+        allocator,
+        text_data_medium,
+        .level_2,
+        "ZIGX Level 2 (64KB text)",
+        "zstd 2",
+        "All Compression Levels (zstd 0-22)",
+    ));
+
+    // Level 3 - Default
+    try results.append(allocator, try runZigxBenchmark(
+        allocator,
+        text_data_medium,
+        .default,
+        "ZIGX Level 3 (64KB text)",
+        "zstd 3 (default)",
+        "All Compression Levels (zstd 0-22)",
+    ));
+
+    // Level 4
+    try results.append(allocator, try runZigxBenchmark(
+        allocator,
+        text_data_medium,
+        .level_4,
+        "ZIGX Level 4 (64KB text)",
+        "zstd 4",
+        "All Compression Levels (zstd 0-22)",
+    ));
+
+    // Level 5
+    try results.append(allocator, try runZigxBenchmark(
+        allocator,
+        text_data_medium,
+        .level_5,
+        "ZIGX Level 5 (64KB text)",
+        "zstd 5",
+        "All Compression Levels (zstd 0-22)",
+    ));
+
+    // Level 6
+    try results.append(allocator, try runZigxBenchmark(
+        allocator,
+        text_data_medium,
+        .level_6,
+        "ZIGX Level 6 (64KB text)",
+        "zstd 6",
+        "All Compression Levels (zstd 0-22)",
+    ));
+
+    // Level 7
+    try results.append(allocator, try runZigxBenchmark(
+        allocator,
+        text_data_medium,
+        .level_7,
+        "ZIGX Level 7 (64KB text)",
+        "zstd 7",
+        "All Compression Levels (zstd 0-22)",
+    ));
+
+    // Level 8
+    try results.append(allocator, try runZigxBenchmark(
+        allocator,
+        text_data_medium,
+        .level_8,
+        "ZIGX Level 8 (64KB text)",
+        "zstd 8",
+        "All Compression Levels (zstd 0-22)",
+    ));
+
+    // Level 9
+    try results.append(allocator, try runZigxBenchmark(
+        allocator,
+        text_data_medium,
+        .level_9,
+        "ZIGX Level 9 (64KB text)",
+        "zstd 9",
+        "All Compression Levels (zstd 0-22)",
+    ));
+
+    // Level 10
+    try results.append(allocator, try runZigxBenchmark(
+        allocator,
+        text_data_medium,
+        .level_10,
+        "ZIGX Level 10 (64KB text)",
+        "zstd 10",
+        "All Compression Levels (zstd 0-22)",
+    ));
+
+    // Level 11
+    try results.append(allocator, try runZigxBenchmark(
+        allocator,
+        text_data_medium,
+        .level_11,
+        "ZIGX Level 11 (64KB text)",
+        "zstd 11",
+        "All Compression Levels (zstd 0-22)",
+    ));
+
+    // Level 12
+    try results.append(allocator, try runZigxBenchmark(
+        allocator,
+        text_data_medium,
+        .level_12,
+        "ZIGX Level 12 (64KB text)",
+        "zstd 12",
+        "All Compression Levels (zstd 0-22)",
+    ));
+
+    // Level 13
+    try results.append(allocator, try runZigxBenchmark(
+        allocator,
+        text_data_medium,
+        .level_13,
+        "ZIGX Level 13 (64KB text)",
+        "zstd 13",
+        "All Compression Levels (zstd 0-22)",
+    ));
+
+    // Level 14
+    try results.append(allocator, try runZigxBenchmark(
+        allocator,
+        text_data_medium,
+        .level_14,
+        "ZIGX Level 14 (64KB text)",
+        "zstd 14",
+        "All Compression Levels (zstd 0-22)",
+    ));
+
+    // Level 15
+    try results.append(allocator, try runZigxBenchmark(
+        allocator,
+        text_data_medium,
+        .level_15,
+        "ZIGX Level 15 (64KB text)",
+        "zstd 15",
+        "All Compression Levels (zstd 0-22)",
+    ));
+
+    // Level 16
+    try results.append(allocator, try runZigxBenchmark(
+        allocator,
+        text_data_medium,
+        .level_16,
+        "ZIGX Level 16 (64KB text)",
+        "zstd 16",
+        "All Compression Levels (zstd 0-22)",
+    ));
+
+    // Level 17
+    try results.append(allocator, try runZigxBenchmark(
+        allocator,
+        text_data_medium,
+        .level_17,
+        "ZIGX Level 17 (64KB text)",
+        "zstd 17",
+        "All Compression Levels (zstd 0-22)",
+    ));
+
+    // Level 18
+    try results.append(allocator, try runZigxBenchmark(
+        allocator,
+        text_data_medium,
+        .level_18,
+        "ZIGX Level 18 (64KB text)",
+        "zstd 18",
+        "All Compression Levels (zstd 0-22)",
+    ));
+
+    // Level 19 - Best
+    try results.append(allocator, try runZigxBenchmark(
+        allocator,
+        text_data_medium,
+        .best,
+        "ZIGX Level 19 (64KB text)",
+        "zstd 19 (best)",
+        "All Compression Levels (zstd 0-22)",
+    ));
+
+    // Level 20
+    try results.append(allocator, try runZigxBenchmark(
+        allocator,
+        text_data_medium,
+        .level_20,
+        "ZIGX Level 20 (64KB text)",
+        "zstd 20",
+        "All Compression Levels (zstd 0-22)",
+    ));
+
+    // Level 21
+    try results.append(allocator, try runZigxBenchmark(
+        allocator,
+        text_data_medium,
+        .level_21,
+        "ZIGX Level 21 (64KB text)",
+        "zstd 21",
+        "All Compression Levels (zstd 0-22)",
+    ));
+
+    // Level 22 - Maximum
+    try results.append(allocator, try runZigxBenchmark(
+        allocator,
+        text_data_medium,
+        .level_22,
+        "ZIGX Level 22 (64KB text)",
+        "zstd 22 (max)",
+        "All Compression Levels (zstd 0-22)",
+    ));
+
+    // ========================================
     // Category: File Type Performance
+    // ========================================
     std.debug.print("Running file type benchmarks...\n", .{});
 
-    try results.append(allocator, try runCompressionBenchmark(
+    try results.append(allocator, try runZigxBenchmark(
         allocator,
         text_data_medium,
         .default,
@@ -579,7 +738,7 @@ pub fn main() !void {
         "File Type Performance",
     ));
 
-    try results.append(allocator, try runCompressionBenchmark(
+    try results.append(allocator, try runZigxBenchmark(
         allocator,
         binary_data,
         .default,
@@ -588,7 +747,7 @@ pub fn main() !void {
         "File Type Performance",
     ));
 
-    try results.append(allocator, try runCompressionBenchmark(
+    try results.append(allocator, try runZigxBenchmark(
         allocator,
         repetitive_data,
         .default,
@@ -597,7 +756,7 @@ pub fn main() !void {
         "File Type Performance",
     ));
 
-    try results.append(allocator, try runCompressionBenchmark(
+    try results.append(allocator, try runZigxBenchmark(
         allocator,
         random_data,
         .default,
@@ -606,7 +765,7 @@ pub fn main() !void {
         "File Type Performance",
     ));
 
-    try results.append(allocator, try runCompressionBenchmark(
+    try results.append(allocator, try runZigxBenchmark(
         allocator,
         mixed_data,
         .default,
@@ -615,10 +774,12 @@ pub fn main() !void {
         "File Type Performance",
     ));
 
+    // ========================================
     // Category: Scalability Test
+    // ========================================
     std.debug.print("Running scalability benchmarks...\n", .{});
 
-    try results.append(allocator, try runCompressionBenchmark(
+    try results.append(allocator, try runZigxBenchmark(
         allocator,
         text_data_small,
         .default,
@@ -627,7 +788,7 @@ pub fn main() !void {
         "Scalability Test",
     ));
 
-    try results.append(allocator, try runCompressionBenchmark(
+    try results.append(allocator, try runZigxBenchmark(
         allocator,
         text_data_medium,
         .default,
@@ -636,7 +797,7 @@ pub fn main() !void {
         "Scalability Test",
     ));
 
-    try results.append(allocator, try runCompressionBenchmark(
+    try results.append(allocator, try runZigxBenchmark(
         allocator,
         text_data_large,
         .default,
@@ -649,7 +810,7 @@ pub fn main() !void {
     const xlarge_data = try generateTestData(allocator, XLARGE_SIZE, .text);
     defer allocator.free(xlarge_data);
 
-    try results.append(allocator, try runCompressionBenchmark(
+    try results.append(allocator, try runZigxBenchmark(
         allocator,
         xlarge_data,
         .default,
@@ -668,14 +829,14 @@ pub fn main() !void {
     // Final summary with dynamic stats
     const stats = calculateStats(results.items);
     std.debug.print("\n", .{});
-    std.debug.print("=" ** 60, .{});
+    std.debug.print("=" ** 80, .{});
     std.debug.print("\n", .{});
     std.debug.print("[OK] Benchmarks completed successfully!\n", .{});
-    std.debug.print("     Average ratio: {d:.1}%\n", .{stats.avg_ratio});
-    std.debug.print("     Best ratio: {d:.1}% ({s})\n", .{ stats.best_ratio, stats.best_ratio_name });
-    std.debug.print("     Avg compress speed: {d:.1} MB/s\n", .{stats.avg_compress_speed});
-    std.debug.print("     Avg decompress speed: {d:.1} MB/s\n", .{stats.avg_decompress_speed});
+    std.debug.print("     ZIGX Average Compressed: {d:.1}% (higher = better)\n", .{stats.avg_ratio});
+    std.debug.print("     ZIGX Best Compressed: {d:.1}% ({s})\n", .{ stats.best_ratio, stats.best_ratio_name });
+    std.debug.print("     ZIGX Avg Compress Speed: {d:.1} MB/s (higher = faster)\n", .{stats.avg_compress_speed});
+    std.debug.print("     ZIGX Avg Decompress Speed: {d:.1} MB/s (higher = faster)\n", .{stats.avg_decompress_speed});
     std.debug.print("     Results written to: benchmark-results.md\n", .{});
-    std.debug.print("=" ** 60, .{});
+    std.debug.print("=" ** 80, .{});
     std.debug.print("\n\n", .{});
 }

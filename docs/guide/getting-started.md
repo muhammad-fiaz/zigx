@@ -9,19 +9,23 @@ Get started with ZIGX in your Zig project.
 
 ## Installation
 
-Add to `build.zig.zon`:
+### Stable Release (Recommended)
 
-```zig
-.{
-    .name = "my-project",
-    .dependencies = .{
-        .zigx = .{
-            .url = "https://github.com/muhammad-fiaz/zigx/archive/refs/tags/v0.0.1.tar.gz",
-            .hash = "...", // Run: zig fetch <url>
-        },
-    },
-}
+Run this command in your project root:
+
+```bash
+zig fetch --save https://github.com/muhammad-fiaz/zigx/archive/refs/tags/v0.0.1.tar.gz
 ```
+
+### Nightly (Bleeding Edge)
+
+If you want the latest features:
+
+```bash
+zig fetch --save git+https://github.com/muhammad-fiaz/zigx
+```
+
+### Configure build.zig
 
 Then in `build.zig`:
 

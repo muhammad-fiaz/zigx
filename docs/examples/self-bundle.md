@@ -96,3 +96,42 @@ zig build run-example -- list dist/zigx-bundle.zigx
 # Extract to directory
 zig build run-example -- unbundle dist/zigx-bundle.zigx ./extracted
 ```
+
+## Advanced Operations
+
+The example tool also supports advanced management features.
+
+### Updating Metadata
+
+```bash
+# Set author
+zig build run-example -- metadata dist/zigx-bundle.zigx set author "ZIGX Team"
+
+# Get author
+zig build run-example -- metadata dist/zigx-bundle.zigx get author
+```
+
+### Signing
+
+```bash
+# Sign the archive
+zig build run-example -- sign dist/zigx-bundle.zigx "my-signature"
+```
+
+### Updating Content
+
+```bash
+# Add a new file
+zig build run-example -- update dist/zigx-bundle.zigx -add EXTRA.md
+
+# Remove source files
+zig build run-example -- update dist/zigx-bundle.zigx -rm "src/*"
+```
+
+### Repairing
+
+```bash
+# Attempt to repair a corrupted file
+zig build run-example -- repair broken.zigx fixed.zigx
+```
+

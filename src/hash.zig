@@ -24,21 +24,8 @@ pub fn bytesToHex(bytes: *const [HASH_SIZE]u8) [HASH_HEX_SIZE]u8 {
 
 pub fn hexToBytes(hex: *const [HASH_HEX_SIZE]u8) ![HASH_SIZE]u8 {
     var result: [HASH_SIZE]u8 = undefined;
-    for (0..HASH_SIZE) |i| {
-        const high = hexCharToNibble(hex[i * 2]) orelse return error.InvalidHexCharacter;
-        const low = hexCharToNibble(hex[i * 2 + 1]) orelse return error.InvalidHexCharacter;
-        result[i] = (@as(u8, high) << 4) | @as(u8, low);
-    }
+    try utils.hexToBytes(hex, &result);
     return result;
-}
-
-fn hexCharToNibble(c: u8) ?u4 {
-    return switch (c) {
-        '0'...'9' => @intCast(c - '0'),
-        'a'...'f' => @intCast(c - 'a' + 10),
-        'A'...'F' => @intCast(c - 'A' + 10),
-        else => null,
-    };
 }
 
 pub const StreamingHasher = struct {

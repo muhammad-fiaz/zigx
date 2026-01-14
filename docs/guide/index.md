@@ -4,9 +4,9 @@ ZIGX is a high-performance compression library written in Zig for bundling files
 
 ## Features
 
-- **LZ77+RLE Hybrid**: Advanced compression combining LZ77 with Run-Length Encoding
-- **64KB Sliding Window**: Large window for better compression of repetitive data
-- **Lazy Matching**: Optimized match finding for improved ratios
+- **Zstandard Compression**: Industry-leading zstd algorithm via Zig bindings
+- **Excellent Ratios**: ~80% space savings on typical data, up to 99.9% on repetitive data
+- **Blazing Fast**: 115+ MB/s compression, 135+ MB/s decompression
 - **Versioned Format**: Track format and compression versions
 - **Security**: SHA-256 checksums and CRC32 verification
 - **Simple API**: Easy-to-use with function aliases
@@ -15,18 +15,18 @@ ZIGX is a high-performance compression library written in Zig for bundling files
 
 ### Performance
 
-| Mode | Ratio | Description |
-|------|-------|-------------|
-| BEST | ~30% | Maximum compression |
-| DEFAULT | ~28% | Balanced |
-| FAST | ~34% | Speed optimized |
+| Mode | zstd Level | Ratio | Description |
+|------|------------|-------|-------------|
+| BEST | 19 | ~19% | Maximum compression |
+| DEFAULT | 3 | ~21% | Balanced |
+| FAST | 1 | ~25% | Speed optimized |
 
 ### Versioning
 
 ZIGX uses dual versioning:
 
 1. **Format Version** (v1): Archive container format
-2. **Compression Version** (v1): Compression algorithm
+2. **Compression Version** (v1): Zstandard (zstd) algorithm
 
 This ensures:
 - Future compatibility

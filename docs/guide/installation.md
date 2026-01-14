@@ -9,63 +9,34 @@ This guide covers different ways to install ZIGX in your Zig project.
 
 ## Using Zig Package Manager (Recommended)
 
-### Step 1: Add Dependency
+### Release Installation (Recommended)
 
-Add ZIGX to your `build.zig.zon`:
-
-```zig
-.{
-    .name = "your-project",
-    .version = "0.1.0",
-    .dependencies = .{
-        .zigx = .{
-            .url = "https://github.com/muhammad-fiaz/zigx/archive/refs/tags/v0.0.1.tar.gz",
-            .hash = "1220...", // Hash will be provided by zig fetch
-        },
-    },
-    .paths = .{"."},
-}
-```
-
-### Step 2: Fetch the Package
-
-Run this command to get the correct hash:
+Install the latest stable release (v0.0.1):
 
 ```bash
-zig fetch https://github.com/muhammad-fiaz/zigx/archive/refs/tags/v0.0.1.tar.gz
+zig fetch --save https://github.com/muhammad-fiaz/zigx/archive/refs/tags/v0.0.1.tar.gz
 ```
 
-Copy the output hash into your `build.zig.zon`.
+### Nightly Installation
 
-### Step 3: Configure build.zig
+Install the latest development version:
+
+```bash
+zig fetch --save git+https://github.com/muhammad-fiaz/zigx
+```
+
+### Configure build.zig
+
+Then in your `build.zig`:
 
 ```zig
-const std = @import("std");
-
-pub fn build(b: *std.Build) void {
-    const target = b.standardTargetOptions(.{});
-    const optimize = b.standardOptimizeOption(.{});
-
-    // Add ZIGX dependency
-    const zigx = b.dependency("zigx", .{
-        .target = target,
-        .optimize = optimize,
-    });
-
-    // Create your executable
-    const exe = b.addExecutable(.{
-        .name = "your-app",
-        .root_source_file = b.path("src/main.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-
-    // Import ZIGX module
-    exe.root_module.addImport("zigx", zigx.module("zigx"));
-
-    b.installArtifact(exe);
-}
+const zigx_dep = b.dependency("zigx", .{
+    .target = target,
+    .optimize = optimize,
+});
+exe.root_module.addImport("zigx", zigx_dep.module("zigx"));
 ```
+
 
 ## Manual Installation
 

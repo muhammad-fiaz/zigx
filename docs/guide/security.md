@@ -37,21 +37,29 @@ std.debug.print("Archive Hash: {s}\n", .{info.archive_hash[0..64]});
 
 Each compressed block has a CRC32 checksum for quick integrity checks during decompression.
 
-## Signing (Future)
+## Signing
 
-Archive signing support is planned:
+Archive signing is supported via CLI or API. The signature is appended to the archive and the header is updated to reflect its presence.
+
+### Sign with CLI
+
+```bash
+# Sign an archive
+zigx sign archive.zigx "my-signature-data"
+```
+
+### Sign with API
 
 ```zig
-// Future API
-_ = try zigx.bundle(.{
-    .allocator = allocator,
-    .include = &.{"src"},
-    .output_path = "signed.zigx",
-    .sign_with = private_key,
-});
+const zigx = @import("zigx");
 
-// Verify signature
-const is_valid = try zigx.verifySignature("signed.zigx", public_key);
+try zigx.manager.setSignature("archive.zigx", "my-secure-signature-bytes", allocator);
+```
+
+### Sign with API
+
+```zig
+try zigx.manager.setSignature("archive.zigx", "signature-bytes", allocator);
 ```
 
 Check signature status:

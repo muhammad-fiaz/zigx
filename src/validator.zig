@@ -100,6 +100,7 @@ pub fn validateDetailed(path: []const u8, allocator: Allocator) ValidationError!
                 .actual = null,
                 .file_path = null,
                 .recoverable = false,
+                .chunk_index = null,
             },
             .allocator = allocator,
         };
@@ -122,6 +123,7 @@ pub fn validateDetailed(path: []const u8, allocator: Allocator) ValidationError!
                 .actual = null,
                 .file_path = null,
                 .recoverable = false,
+                .chunk_index = null,
             },
             .allocator = allocator,
         };
@@ -147,8 +149,10 @@ pub fn validateDetailed(path: []const u8, allocator: Allocator) ValidationError!
 
         if (offset + 8 > decompressed.len) return ValidationError.UnexpectedEof;
 
-        const content_len = std.mem.readInt(u64, decompressed[offset..][0..8], .little);
+        const content_len_u64 = std.mem.readInt(u64, decompressed[offset..][0..8], .little);
         offset += 8;
+
+        const content_len = std.math.cast(usize, content_len_u64) orelse return ValidationError.OutOfMemory;
 
         if (offset + content_len > decompressed.len) return ValidationError.UnexpectedEof;
 
@@ -186,6 +190,7 @@ pub fn validateDetailed(path: []const u8, allocator: Allocator) ValidationError!
             .actual = null,
             .file_path = null,
             .recoverable = true,
+            .chunk_index = null,
         } else null,
         .allocator = allocator,
     };
@@ -279,8 +284,10 @@ pub fn validateFile(
 
         if (offset + 8 > decompressed.len) break;
 
-        const content_len = std.mem.readInt(u64, decompressed[offset..][0..8], .little);
+        const content_len_u64 = std.mem.readInt(u64, decompressed[offset..][0..8], .little);
         offset += 8;
+
+        const content_len = std.math.cast(usize, content_len_u64) orelse break;
 
         if (offset + content_len > decompressed.len) break;
 
@@ -306,6 +313,7 @@ pub fn detectCorruption(path: []const u8, allocator: Allocator) !?CorruptionInfo
                 .actual = null,
                 .file_path = null,
                 .recoverable = false,
+                .chunk_index = null,
             },
             else => null,
         };
@@ -321,6 +329,7 @@ pub fn detectCorruption(path: []const u8, allocator: Allocator) !?CorruptionInfo
             .actual = null,
             .file_path = null,
             .recoverable = false,
+            .chunk_index = null,
         };
     };
 
@@ -332,6 +341,7 @@ pub fn detectCorruption(path: []const u8, allocator: Allocator) !?CorruptionInfo
             .actual = null,
             .file_path = null,
             .recoverable = false,
+            .chunk_index = null,
         };
     }
 
@@ -345,6 +355,7 @@ pub fn detectCorruption(path: []const u8, allocator: Allocator) !?CorruptionInfo
             .actual = null,
             .file_path = null,
             .recoverable = false,
+            .chunk_index = null,
         };
     }
 
@@ -356,6 +367,7 @@ pub fn detectCorruption(path: []const u8, allocator: Allocator) !?CorruptionInfo
             .actual = null,
             .file_path = null,
             .recoverable = false,
+            .chunk_index = null,
         };
     }
 
@@ -367,6 +379,7 @@ pub fn detectCorruption(path: []const u8, allocator: Allocator) !?CorruptionInfo
             .actual = null,
             .file_path = null,
             .recoverable = false,
+            .chunk_index = null,
         };
     }
 
@@ -379,6 +392,7 @@ pub fn detectCorruption(path: []const u8, allocator: Allocator) !?CorruptionInfo
             .actual = null,
             .file_path = null,
             .recoverable = false,
+            .chunk_index = null,
         };
     };
 
@@ -399,6 +413,7 @@ pub fn detectCorruption(path: []const u8, allocator: Allocator) !?CorruptionInfo
             .actual = null,
             .file_path = null,
             .recoverable = false,
+            .chunk_index = null,
         };
     };
 
@@ -410,6 +425,7 @@ pub fn detectCorruption(path: []const u8, allocator: Allocator) !?CorruptionInfo
             .actual = null,
             .file_path = null,
             .recoverable = false,
+            .chunk_index = null,
         };
     }
 
@@ -422,10 +438,11 @@ pub fn detectCorruption(path: []const u8, allocator: Allocator) !?CorruptionInfo
             .actual = null,
             .file_path = null,
             .recoverable = false,
+            .chunk_index = null,
         };
     }
 
-    _ = compression.decompress(compressed_payload, allocator) catch {
+    const decompressed = compression.decompress(compressed_payload, allocator) catch {
         return CorruptionInfo{
             .corruption_type = .decompression_failed,
             .offset = payload_offset,
@@ -433,8 +450,10 @@ pub fn detectCorruption(path: []const u8, allocator: Allocator) !?CorruptionInfo
             .actual = null,
             .file_path = null,
             .recoverable = false,
+            .chunk_index = null,
         };
     };
+    allocator.free(decompressed);
 
     return null;
 }
