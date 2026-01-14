@@ -1,4 +1,5 @@
 <div align="center">
+<img width="500" height="500" alt="zigx logo" src="https://github.com/user-attachments/assets/828b304b-2a21-4edd-93a3-6bd184e1dadf" />
 
 <a href="https://muhammad-fiaz.github.io/zigx/"><img src="https://img.shields.io/badge/docs-muhammad--fiaz.github.io-blue" alt="Documentation"></a>
 <a href="https://ziglang.org/"><img src="https://img.shields.io/badge/Zig-0.15.2-orange.svg?logo=zig" alt="Zig Version"></a>
