@@ -20,6 +20,7 @@ const BenchmarkResult = struct {
     file_count: usize,
 
     const categories = [_][]const u8{
+        "Self-Bundle (Real Project)",
         "ZIGX Compression Levels",
         "File Type Performance",
         "Scalability Test",
@@ -34,6 +35,9 @@ const XLARGE_SIZE: usize = 4 * 1024 * 1024; // 4 MB
 
 /// Number of iterations for accurate timing
 const ITERATIONS: u32 = 5;
+
+/// Fewer iterations for self-bundle (real files take longer)
+const SELF_BUNDLE_ITERATIONS: u32 = 3;
 
 /// Benchmark temp directory
 const BENCH_DIR = "bench_temp";
@@ -111,6 +115,136 @@ fn cleanupBenchmark() void {
     std.fs.cwd().deleteTree(BENCH_EXTRACT) catch {};
     // Recreate for next iteration
     std.fs.cwd().makePath(BENCH_EXTRACT) catch {};
+}
+
+/// Calculate total directory size
+fn getDirSize(allocator: std.mem.Allocator, paths: []const []const u8) u64 {
+    var total: u64 = 0;
+    for (paths) |path| {
+        if (std.fs.cwd().openDir(path, .{ .iterate = true })) |dir| {
+            var d = dir;
+            var walker = d.walk(allocator) catch continue;
+            defer walker.deinit();
+            while (walker.next() catch null) |entry| {
+                if (entry.kind == .file) {
+                    const stat = d.statFile(entry.path) catch continue;
+                    total += stat.size;
+                }
+            }
+        } else |_| {
+            // It's a file, not a directory
+            if (std.fs.cwd().statFile(path)) |stat| {
+                total += stat.size;
+            } else |_| {}
+        }
+    }
+    return total;
+}
+
+/// Run self-bundle benchmark (bundle actual project files - minimal set for speed)
+fn runSelfBundleBenchmark(
+    allocator: std.mem.Allocator,
+    level: CompressionLevel,
+    name: []const u8,
+    notes: []const u8,
+) !BenchmarkResult {
+    var total_bundle_time: u64 = 0;
+    var total_unbundle_time: u64 = 0;
+    var archive_size: u64 = 0;
+    var original_size: u64 = 0;
+    var file_count: usize = 0;
+
+    // Minimal project files for fast benchmarking (safe - won't delete these)
+    const include_paths = [_][]const u8{ "src", "build.zig", "README.md" };
+    const exclude_patterns = [_][]const u8{ "*.zigx", "bench_temp", "zig-out", "zig-cache", ".zig-cache" };
+
+    // Calculate original size
+    original_size = getDirSize(allocator, &include_paths);
+
+    // Warmup run
+    {
+        var result = zigx.bundle(.{
+            .allocator = allocator,
+            .include = &include_paths,
+            .exclude = &exclude_patterns,
+            .output_path = BENCH_OUTPUT,
+            .level = level,
+        }) catch |err| {
+            std.debug.print("Self-bundle warmup error: {}\n", .{err});
+            return err;
+        };
+        result.deinit();
+
+        zigx.unbundle(.{
+            .archive_path = BENCH_OUTPUT,
+            .output_dir = BENCH_EXTRACT,
+            .allocator = allocator,
+            .overwrite = true,
+        }) catch |err| {
+            std.debug.print("Self-bundle warmup unbundle error: {}\n", .{err});
+            return err;
+        };
+        cleanupBenchmark();
+    }
+
+    // Benchmark iterations (fewer for real files to speed up)
+    for (0..SELF_BUNDLE_ITERATIONS) |_| {
+        var timer = try std.time.Timer.start();
+        var result = try zigx.bundle(.{
+            .allocator = allocator,
+            .include = &include_paths,
+            .exclude = &exclude_patterns,
+            .output_path = BENCH_OUTPUT,
+            .level = level,
+        });
+        total_bundle_time += timer.read();
+        archive_size = result.archive_size;
+        original_size = result.original_size;
+        file_count = result.file_count;
+        result.deinit();
+
+        timer.reset();
+        try zigx.unbundle(.{
+            .archive_path = BENCH_OUTPUT,
+            .output_dir = BENCH_EXTRACT,
+            .allocator = allocator,
+            .overwrite = true,
+        });
+        total_unbundle_time += timer.read();
+
+        cleanupBenchmark();
+    }
+
+    const avg_bundle_time = total_bundle_time / SELF_BUNDLE_ITERATIONS;
+    const avg_unbundle_time = total_unbundle_time / SELF_BUNDLE_ITERATIONS;
+
+    const original_size_f: f64 = @floatFromInt(original_size);
+    const archive_size_f: f64 = @floatFromInt(archive_size);
+
+    const compression_ratio = if (original_size_f > 0) (1.0 - archive_size_f / original_size_f) * 100.0 else 0.0;
+    const bundle_speed = if (avg_bundle_time > 0)
+        original_size_f / (@as(f64, @floatFromInt(avg_bundle_time)) / 1_000_000_000.0) / (1024.0 * 1024.0)
+    else
+        0.0;
+    const unbundle_speed = if (avg_unbundle_time > 0)
+        original_size_f / (@as(f64, @floatFromInt(avg_unbundle_time)) / 1_000_000_000.0) / (1024.0 * 1024.0)
+    else
+        0.0;
+
+    return BenchmarkResult{
+        .name = name,
+        .format = "ZIGX (.zigx)",
+        .original_size = original_size,
+        .archive_size = archive_size,
+        .compression_ratio = compression_ratio,
+        .bundle_time_ns = avg_bundle_time,
+        .unbundle_time_ns = avg_unbundle_time,
+        .bundle_speed_mbs = bundle_speed,
+        .unbundle_speed_mbs = unbundle_speed,
+        .notes = notes,
+        .category = "Self-Bundle (Real Project)",
+        .file_count = file_count,
+    };
 }
 
 /// Run ZIGX archive benchmark using bundle() and unbundle()
@@ -222,11 +356,8 @@ fn runZigxBenchmark(
 /// Print results to console with proper table formatting
 fn printResults(results: []const BenchmarkResult) void {
     std.debug.print("\n", .{});
-    std.debug.print("=" ** 130, .{});
+    std.debug.print("ZIGX ARCHIVE FORMAT BENCHMARK RESULTS\n", .{});
     std.debug.print("\n", .{});
-    std.debug.print("                                    ZIGX ARCHIVE FORMAT BENCHMARK RESULTS\n", .{});
-    std.debug.print("=" ** 130, .{});
-    std.debug.print("\n\n", .{});
 
     for (BenchmarkResult.categories) |cat| {
         var has_category = false;
@@ -239,7 +370,7 @@ fn printResults(results: []const BenchmarkResult) void {
         if (!has_category) continue;
 
         std.debug.print("[{s}]\n", .{cat});
-        std.debug.print("-" ** 130, .{});
+        std.debug.print("-" ** 110, .{});
         std.debug.print("\n", .{});
 
         // Header row - clear column names
@@ -252,17 +383,7 @@ fn printResults(results: []const BenchmarkResult) void {
             "Unbundle MB/s",
             "Notes",
         });
-        // Sub-header showing direction (lower/higher = better)
-        std.debug.print("{s:<30} {s:>10} {s:>12} {s:>12} {s:>12} {s:>12} {s:<20}\n", .{
-            "",
-            "(bytes)",
-            "(lower=better)",
-            "(higher=better)",
-            "(higher=better)",
-            "(higher=better)",
-            "",
-        });
-        std.debug.print("-" ** 130, .{});
+        std.debug.print("-" ** 110, .{});
         std.debug.print("\n", .{});
 
         for (results) |r| {
@@ -418,23 +539,46 @@ fn writeMarkdownReport(results: []const BenchmarkResult, allocator: std.mem.Allo
         defer allocator.free(cat_header);
         _ = try file.write(cat_header);
 
-        _ = try file.write("| Benchmark | Original | Archive | Saved % | Bundle | Unbundle | Notes |\n");
-        _ = try file.write("|:----------|----------:|-------:|--------:|-------:|---------:|:------|\n");
-        _ = try file.write("| | *(bytes)* | *(lower=better)* | *(higher=better)* | *(MB/s)* | *(MB/s)* | |\n");
+        // Special formatting for Self-Bundle category (use KB)
+        if (std.mem.eql(u8, cat, "Self-Bundle (Real Project)")) {
+            _ = try file.write("| Level | Original | Archive | Saved % | Bundle | Unbundle |\n");
+            _ = try file.write("|:------|----------:|--------:|--------:|-------:|---------:|\n");
 
-        for (results) |r| {
-            if (std.mem.eql(u8, r.category, cat)) {
-                var line_buf: [512]u8 = undefined;
-                const line = std.fmt.bufPrint(&line_buf, "| {s} | {d} B | {d} B | {d:.1}% | {d:.1} | {d:.1} | {s} |\n", .{
-                    r.name,
-                    r.original_size,
-                    r.archive_size,
-                    r.compression_ratio,
-                    r.bundle_speed_mbs,
-                    r.unbundle_speed_mbs,
-                    r.notes,
-                }) catch continue;
-                _ = try file.write(line);
+            for (results) |r| {
+                if (std.mem.eql(u8, r.category, cat)) {
+                    var line_buf: [512]u8 = undefined;
+                    const orig_kb = @as(f64, @floatFromInt(r.original_size)) / 1024.0;
+                    const arch_kb = @as(f64, @floatFromInt(r.archive_size)) / 1024.0;
+                    const line = std.fmt.bufPrint(&line_buf, "| {s} | {d:.0} KB | {d:.0} KB | {d:.1}% | {d:.1} MB/s | {d:.1} MB/s |\n", .{
+                        r.name,
+                        orig_kb,
+                        arch_kb,
+                        r.compression_ratio,
+                        r.bundle_speed_mbs,
+                        r.unbundle_speed_mbs,
+                    }) catch continue;
+                    _ = try file.write(line);
+                }
+            }
+        } else {
+            _ = try file.write("| Benchmark | Original | Archive | Saved % | Bundle | Unbundle | Notes |\n");
+            _ = try file.write("|:----------|----------:|-------:|--------:|-------:|---------:|:------|\n");
+            _ = try file.write("| | *(bytes)* | *(lower=better)* | *(higher=better)* | *(MB/s)* | *(MB/s)* | |\n");
+
+            for (results) |r| {
+                if (std.mem.eql(u8, r.category, cat)) {
+                    var line_buf: [512]u8 = undefined;
+                    const line = std.fmt.bufPrint(&line_buf, "| {s} | {d} B | {d} B | {d:.1}% | {d:.1} | {d:.1} | {s} |\n", .{
+                        r.name,
+                        r.original_size,
+                        r.archive_size,
+                        r.compression_ratio,
+                        r.bundle_speed_mbs,
+                        r.unbundle_speed_mbs,
+                        r.notes,
+                    }) catch continue;
+                    _ = try file.write(line);
+                }
             }
         }
     }
@@ -550,6 +694,30 @@ pub fn main() !void {
     std.fs.cwd().makePath(BENCH_DIR) catch {};
     std.fs.cwd().makePath(BENCH_EXTRACT) catch {};
 
+    // Category: Self-Bundle (Real Project) - bundle actual project files (minimal tests)
+    std.debug.print("Running self-bundle benchmarks (bundling actual project)...\n", .{});
+
+    try results.append(allocator, try runSelfBundleBenchmark(
+        allocator,
+        .fast,
+        ".fast",
+        "zstd 1",
+    ));
+
+    try results.append(allocator, try runSelfBundleBenchmark(
+        allocator,
+        .default,
+        ".default",
+        "zstd 3",
+    ));
+
+    try results.append(allocator, try runSelfBundleBenchmark(
+        allocator,
+        .best,
+        ".best",
+        "zstd 19",
+    ));
+
     // Generate test data
     std.debug.print("Generating test data...\n", .{});
 
@@ -574,9 +742,7 @@ pub fn main() !void {
     const mixed_data = try generateTestData(allocator, MEDIUM_SIZE, .mixed);
     defer allocator.free(mixed_data);
 
-    // ========================================
     // Category: ZIGX Compression Levels
-    // ========================================
     std.debug.print("Running ZIGX compression level benchmarks...\n", .{});
 
     // Level none - No compression (store)
@@ -596,7 +762,7 @@ pub fn main() !void {
         text_data_medium,
         .fast,
         "ZIGX .fast (64KB text)",
-        "Fast compression",
+        "zstd 1",
         "ZIGX Compression Levels",
         "test_text.txt",
     ));
@@ -607,7 +773,51 @@ pub fn main() !void {
         text_data_medium,
         .default,
         "ZIGX .default (64KB text)",
-        "Balanced",
+        "zstd 3",
+        "ZIGX Compression Levels",
+        "test_text.txt",
+    ));
+
+    // Level balanced (level 6)
+    try results.append(allocator, try runZigxBenchmark(
+        allocator,
+        text_data_medium,
+        CompressionLevel.balanced,
+        "ZIGX .balanced (64KB text)",
+        "zstd 6",
+        "ZIGX Compression Levels",
+        "test_text.txt",
+    ));
+
+    // Custom level 9
+    try results.append(allocator, try runZigxBenchmark(
+        allocator,
+        text_data_medium,
+        CompressionLevel.custom(9),
+        "ZIGX level 9 (64KB text)",
+        "zstd 9",
+        "ZIGX Compression Levels",
+        "test_text.txt",
+    ));
+
+    // Custom level 12
+    try results.append(allocator, try runZigxBenchmark(
+        allocator,
+        text_data_medium,
+        CompressionLevel.custom(12),
+        "ZIGX level 12 (64KB text)",
+        "zstd 12",
+        "ZIGX Compression Levels",
+        "test_text.txt",
+    ));
+
+    // Custom level 15
+    try results.append(allocator, try runZigxBenchmark(
+        allocator,
+        text_data_medium,
+        CompressionLevel.custom(15),
+        "ZIGX level 15 (64KB text)",
+        "zstd 15",
         "ZIGX Compression Levels",
         "test_text.txt",
     ));
@@ -618,14 +828,23 @@ pub fn main() !void {
         text_data_medium,
         .best,
         "ZIGX .best (64KB text)",
-        "Best compression",
+        "zstd 19",
         "ZIGX Compression Levels",
         "test_text.txt",
     ));
 
-    // ========================================
+    // Level ultra (level 22)
+    try results.append(allocator, try runZigxBenchmark(
+        allocator,
+        text_data_medium,
+        CompressionLevel.ultra,
+        "ZIGX .ultra (64KB text)",
+        "zstd 22",
+        "ZIGX Compression Levels",
+        "test_text.txt",
+    ));
+
     // Category: File Type Performance
-    // ========================================
     std.debug.print("Running file type benchmarks...\n", .{});
 
     try results.append(allocator, try runZigxBenchmark(
@@ -678,9 +897,7 @@ pub fn main() !void {
         "test_mixed.dat",
     ));
 
-    // ========================================
     // Category: Scalability Test
-    // ========================================
     std.debug.print("Running scalability benchmarks...\n", .{});
 
     try results.append(allocator, try runZigxBenchmark(
@@ -741,14 +958,11 @@ pub fn main() !void {
     // Final summary with dynamic stats
     const stats = calculateStats(results.items);
     std.debug.print("\n", .{});
-    std.debug.print("=" ** 80, .{});
-    std.debug.print("\n", .{});
     std.debug.print("[OK] ZIGX Archive Format Benchmarks completed successfully!\n", .{});
     std.debug.print("     Average Space Saved: {d:.1}% (higher = better)\n", .{stats.avg_ratio});
     std.debug.print("     Best Space Saved: {d:.1}% ({s})\n", .{ stats.best_ratio, stats.best_ratio_name });
     std.debug.print("     Avg Bundle Speed: {d:.1} MB/s (higher = faster)\n", .{stats.avg_bundle_speed});
     std.debug.print("     Avg Unbundle Speed: {d:.1} MB/s (higher = faster)\n", .{stats.avg_unbundle_speed});
     std.debug.print("     Results written to: docs/benchmark-results.md\n", .{});
-    std.debug.print("=" ** 80, .{});
-    std.debug.print("\n\n", .{});
+    std.debug.print("\n", .{});
 }

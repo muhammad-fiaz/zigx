@@ -66,11 +66,19 @@ pub const FILE_EXTENSION = ".zigx";
 ### CompressionLevel
 
 ```zig
-pub const CompressionLevel = enum {
-    none,     // Store only, no compression
-    fast,     // Speed optimized
-    default,  // Balanced
-    best,     // Maximum compression
+pub const CompressionLevel = enum(u8) {
+    none = 0,      // Store only, no compression
+    fast = 1,      // Speed optimized (zstd 1)
+    default = 3,   // Balanced (zstd 3)
+    balanced = 6,  // Good balance (zstd 6)
+    best = 19,     // High compression (zstd 19)
+    ultra = 22,    // Maximum compression (zstd 22)
+    
+    // Fine-grained levels: level_2 through level_22
+    
+    pub fn custom(level: u8) CompressionLevel;  // Any level 1-22
+    pub fn toInt(self: CompressionLevel) u8;    // Get raw value
+    pub fn fromInt(level: u8) CompressionLevel; // From integer
 };
 ```
 
@@ -85,6 +93,10 @@ pub const CompressOptions = struct {
     level: CompressionLevel = .best,         // Compression level
     compression_enabled: bool = true,        // Enable compression
     auto_metadata: bool = true,              // Auto-generate metadata
+    progress_callback: ?ProgressCallback = null,    // Progress tracking
+    progress_context: ?*anyopaque = null,           // Callback context
+    adaptive_compression: bool = false,      // Auto-detect content type
+    long_distance_matching: bool = false,    // Better for large files
 };
 ```
 
@@ -97,7 +109,39 @@ pub const ExtractOptions = struct {
     allocator: Allocator,                    // Required
     validate: bool = true,                   // Validate checksums
     overwrite: bool = false,                 // Overwrite existing
+    progress_callback: ?ExtractProgressCallback = null,  // Progress tracking
+    progress_context: ?*anyopaque = null,                // Callback context
 };
+```
+
+### Progress Types
+
+```zig
+// Bundle progress
+pub const ProgressEvent = enum { scanning, reading_file, compressing, writing, finalizing };
+pub const ProgressInfo = struct {
+    event: ProgressEvent,
+    current_file: ?[]const u8,
+    files_processed: usize,
+    total_files: usize,
+    bytes_processed: u64,
+    total_bytes: u64,
+    pub fn getPercent(self: *const ProgressInfo) f64;
+};
+pub const ProgressCallback = *const fn (info: ProgressInfo, context: ?*anyopaque) void;
+
+// Extract progress
+pub const ExtractProgressEvent = enum { started, reading_archive, decompressing, extracting_file, verifying, completed };
+pub const ExtractProgressInfo = struct {
+    event: ExtractProgressEvent,
+    current_file: ?[]const u8,
+    files_extracted: usize,
+    total_files: usize,
+    bytes_written: u64,
+    total_bytes: u64,
+    pub fn getPercent(self: *const ExtractProgressInfo) f64;
+};
+pub const ExtractProgressCallback = *const fn (info: ExtractProgressInfo, context: ?*anyopaque) void;
 ```
 
 ### ArchiveInfo

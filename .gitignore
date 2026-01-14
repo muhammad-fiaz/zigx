@@ -60,3 +60,5 @@ bun.lockb
 logs/
 *.log
 *.zigx
+bench_temp
+*.txt

@@ -15,6 +15,101 @@ pub const CompressionError = error{
     ChecksumMismatch,
     ContentSizeUnknown,
     FileTooLarge,
+    DictionaryError,
+    WindowSizeExceeded,
+    StreamingError,
+};
+
+/// Dictionary for improved compression of similar data
+pub const Dictionary = struct {
+    data: []const u8,
+    id: u32,
+    allocator: ?Allocator,
+    owned: bool,
+
+    /// Create a dictionary from training data
+    pub fn train(samples: []const []const u8, dict_size: usize, allocator: Allocator) !Dictionary {
+        if (samples.len == 0) return error.InvalidData;
+
+        // Calculate total size and create sample sizes array
+        var total_size: usize = 0;
+        for (samples) |sample| total_size += sample.len;
+
+        const combined = try allocator.alloc(u8, total_size);
+        defer allocator.free(combined);
+
+        const sizes = try allocator.alloc(usize, samples.len);
+        defer allocator.free(sizes);
+
+        var offset: usize = 0;
+        for (samples, 0..) |sample, i| {
+            @memcpy(combined[offset..][0..sample.len], sample);
+            sizes[i] = sample.len;
+            offset += sample.len;
+        }
+
+        const dict_buf = try allocator.alloc(u8, dict_size);
+        errdefer allocator.free(dict_buf);
+
+        const actual_size = zstd.c.ZDICT_trainFromBuffer(
+            dict_buf.ptr,
+            dict_size,
+            combined.ptr,
+            sizes.ptr,
+            @intCast(samples.len),
+        );
+
+        if (zstd.c.ZSTD_isError(actual_size) != 0) {
+            allocator.free(dict_buf);
+            return CompressionError.DictionaryError;
+        }
+
+        // Calculate dictionary ID from content
+        const id = utils.crc32(dict_buf[0..actual_size]);
+
+        return Dictionary{
+            .data = dict_buf[0..actual_size],
+            .id = id,
+            .allocator = allocator,
+            .owned = true,
+        };
+    }
+
+    /// Create a dictionary from pre-built data
+    pub fn fromData(data: []const u8, allocator: ?Allocator) Dictionary {
+        return .{
+            .data = data,
+            .id = utils.crc32(data),
+            .allocator = allocator,
+            .owned = false,
+        };
+    }
+
+    pub fn deinit(self: *Dictionary) void {
+        if (self.owned) {
+            if (self.allocator) |alloc| {
+                alloc.free(self.data);
+            }
+        }
+    }
+};
+
+/// Advanced compression options
+pub const AdvancedOptions = struct {
+    /// Compression level
+    level: config.CompressionLevel = .default,
+    /// Dictionary for improved compression
+    dictionary: ?*const Dictionary = null,
+    /// Enable long-distance matching (better for large files)
+    long_distance_matching: bool = false,
+    /// Window log (higher = more memory, better compression for large files)
+    window_log: ?u5 = null,
+    /// Enable content checksum in zstd frame
+    content_checksum: bool = true,
+    /// Enable multi-threaded compression (0 = auto, 1 = single-threaded)
+    threads: u8 = 0,
+    /// Target size hint (0 = no limit)
+    target_size: usize = 0,
 };
 
 /// Compression Format Version 1 - ZXCM with Zstandard
@@ -33,6 +128,8 @@ const HEADER_SIZE: usize = 18;
 const FLAG_NONE: u8 = 0x00;
 const FLAG_ZSTD: u8 = 0x01;
 const FLAG_CHECKSUM: u8 = 0x04;
+const FLAG_DICTIONARY: u8 = 0x08;
+const FLAG_LONG_DISTANCE: u8 = 0x10;
 
 // Zstd content size constants (from zstd manual)
 const ZSTD_CONTENTSIZE_UNKNOWN: u64 = std.math.maxInt(u64);
@@ -45,6 +142,8 @@ pub const CompressionStats = struct {
     literals: u64 = 0,
     matches: u64 = 0,
     rle_runs: u64 = 0,
+    dictionary_used: bool = false,
+    content_type: ContentType = .unknown,
 
     pub fn ratio(self: CompressionStats) f64 {
         if (self.original_size == 0) return 1.0;
@@ -54,12 +153,214 @@ pub const CompressionStats = struct {
     pub fn savedPercent(self: CompressionStats) f64 {
         return (1.0 - self.ratio()) * 100.0;
     }
+
+    pub fn format(self: CompressionStats) CompressionStatsFormatted {
+        return .{
+            .ratio = self.ratio(),
+            .saved_percent = self.savedPercent(),
+            .original = utils.formatSize(self.original_size),
+            .compressed = utils.formatSize(self.compressed_size),
+        };
+    }
+};
+
+/// Formatted compression stats for display
+pub const CompressionStatsFormatted = struct {
+    ratio: f64,
+    saved_percent: f64,
+    original: utils.SizeUnit,
+    compressed: utils.SizeUnit,
+};
+
+/// Content type hint for adaptive compression
+pub const ContentType = enum(u8) {
+    unknown = 0,
+    text = 1,
+    binary = 2,
+    source_code = 3,
+    json = 4,
+    xml = 5,
+    image = 6,
+    audio = 7,
+    video = 8,
+    archive = 9,
+    executable = 10,
+    config = 11,
+
+    /// Detect content type from data
+    pub fn detect(data: []const u8) ContentType {
+        if (data.len == 0) return .unknown;
+
+        // Check magic bytes for common formats
+        if (data.len >= 4) {
+            // PNG
+            if (data[0] == 0x89 and data[1] == 'P' and data[2] == 'N' and data[3] == 'G') return .image;
+            // JPEG
+            if (data[0] == 0xFF and data[1] == 0xD8) return .image;
+            // GIF
+            if (std.mem.startsWith(u8, data, "GIF8")) return .image;
+            // ZIP/JAR
+            if (data[0] == 'P' and data[1] == 'K') return .archive;
+            // GZIP
+            if (data[0] == 0x1F and data[1] == 0x8B) return .archive;
+            // ELF
+            if (data[0] == 0x7F and std.mem.startsWith(u8, data[1..], "ELF")) return .executable;
+            // PE (Windows exe)
+            if (data[0] == 'M' and data[1] == 'Z') return .executable;
+        }
+
+        // Check for JSON
+        const trimmed = std.mem.trim(u8, data[0..@min(data.len, 256)], " \t\n\r");
+        if (trimmed.len > 0 and (trimmed[0] == '{' or trimmed[0] == '[')) return .json;
+
+        // Check for XML
+        if (std.mem.startsWith(u8, trimmed, "<?xml") or std.mem.startsWith(u8, trimmed, "<")) return .xml;
+
+        // Analyze byte distribution for text vs binary
+        var printable: usize = 0;
+        var null_count: usize = 0;
+        const sample_size = @min(data.len, 4096);
+
+        if (sample_size == 0) return .unknown;
+
+        for (data[0..sample_size]) |byte| {
+            if (byte == 0) null_count += 1;
+            if (byte >= 32 and byte < 127 or byte == '\n' or byte == '\r' or byte == '\t') {
+                printable += 1;
+            }
+        }
+
+        // Binary if has null bytes
+        if (null_count > sample_size / 100) return .binary;
+
+        // Text if mostly printable (use division to avoid overflow)
+        if (printable * 100 / sample_size > 90) {
+            // Check for source code patterns
+            if (std.mem.indexOf(u8, data[0..sample_size], "const ") != null or
+                std.mem.indexOf(u8, data[0..sample_size], "fn ") != null or
+                std.mem.indexOf(u8, data[0..sample_size], "pub ") != null or
+                std.mem.indexOf(u8, data[0..sample_size], "import ") != null or
+                std.mem.indexOf(u8, data[0..sample_size], "function ") != null or
+                std.mem.indexOf(u8, data[0..sample_size], "class ") != null or
+                std.mem.indexOf(u8, data[0..sample_size], "#include") != null)
+            {
+                return .source_code;
+            }
+            return .text;
+        }
+
+        return .binary;
+    }
+
+    /// Get recommended compression level for content type
+    pub fn recommendedLevel(self: ContentType) config.CompressionLevel {
+        return switch (self) {
+            .text, .source_code, .json, .xml, .config => .best,
+            .image, .audio, .video, .archive => .fast, // Already compressed
+            .binary, .executable => .default,
+            .unknown => .default,
+        };
+    }
 };
 
 /// Compress data using the default or specified compression level
 pub fn compress(data: []const u8, allocator: Allocator, level: ?config.CompressionLevel) CompressionError![]u8 {
     const comp_level = level orelse config.global.compression.level;
     return compressAdvanced(data, allocator, comp_level);
+}
+
+/// Compress with content-aware adaptive level selection
+pub fn compressAdaptive(data: []const u8, allocator: Allocator) CompressionError![]u8 {
+    const content_type = ContentType.detect(data);
+    const level = content_type.recommendedLevel();
+    return compressAdvanced(data, allocator, level);
+}
+
+/// Compress with full advanced options
+pub fn compressWithOptions(data: []const u8, allocator: Allocator, options: AdvancedOptions) CompressionError![]u8 {
+    if (options.level == .none) {
+        return compressStore(data, allocator);
+    }
+
+    const max_compressed_size = zstd.c.ZSTD_compressBound(data.len);
+    if (max_compressed_size == 0) {
+        return CompressionError.CompressionFailed;
+    }
+
+    const total_size = HEADER_SIZE + max_compressed_size;
+    const output = allocator.alloc(u8, total_size) catch {
+        return CompressionError.OutOfMemory;
+    };
+    errdefer allocator.free(output);
+
+    // Write header
+    @memcpy(output[0..4], &MAGIC);
+    output[4] = VERSION;
+
+    var flags: u8 = FLAG_ZSTD;
+    if (options.content_checksum) flags |= FLAG_CHECKSUM;
+    if (options.dictionary != null) flags |= FLAG_DICTIONARY;
+    output[5] = flags;
+
+    std.mem.writeInt(u64, output[6..14], data.len, .little);
+    const checksum = utils.crc32(data);
+    std.mem.writeInt(u32, output[14..18], checksum, .little);
+
+    // Create compression context for advanced options
+    const cctx = zstd.c.ZSTD_createCCtx();
+    if (cctx == null) return CompressionError.OutOfMemory;
+    defer _ = zstd.c.ZSTD_freeCCtx(cctx);
+
+    // Set compression parameters
+    _ = zstd.c.ZSTD_CCtx_setParameter(cctx, zstd.c.ZSTD_c_compressionLevel, options.level.toZstdLevel());
+
+    if (options.long_distance_matching) {
+        _ = zstd.c.ZSTD_CCtx_setParameter(cctx, zstd.c.ZSTD_c_enableLongDistanceMatching, 1);
+    }
+
+    if (options.window_log) |wlog| {
+        _ = zstd.c.ZSTD_CCtx_setParameter(cctx, zstd.c.ZSTD_c_windowLog, @intCast(wlog));
+    }
+
+    if (options.content_checksum) {
+        _ = zstd.c.ZSTD_CCtx_setParameter(cctx, zstd.c.ZSTD_c_checksumFlag, 1);
+    }
+
+    // Load dictionary if provided
+    if (options.dictionary) |dict| {
+        const dict_result = zstd.c.ZSTD_CCtx_loadDictionary(cctx, dict.data.ptr, dict.data.len);
+        if (zstd.c.ZSTD_isError(dict_result) != 0) {
+            allocator.free(output);
+            return CompressionError.DictionaryError;
+        }
+    }
+
+    // Compress
+    const compressed_size = zstd.c.ZSTD_compress2(
+        cctx,
+        output[HEADER_SIZE..].ptr,
+        max_compressed_size,
+        data.ptr,
+        data.len,
+    );
+
+    if (zstd.c.ZSTD_isError(compressed_size) != 0) {
+        allocator.free(output);
+        return CompressionError.CompressionFailed;
+    }
+
+    const final_size = HEADER_SIZE + compressed_size;
+    if (allocator.resize(output, final_size)) {
+        return output[0..final_size];
+    } else {
+        const result = allocator.alloc(u8, final_size) catch {
+            allocator.free(output);
+            return CompressionError.OutOfMemory;
+        };
+        @memcpy(result, output[0..final_size]);
+        allocator.free(output);
+        return result;
+    }
 }
 
 /// Compress data with advanced options using Zstandard compression
@@ -233,12 +534,24 @@ pub const StreamingCompressor = struct {
     buffer: std.ArrayList(u8),
     level: config.CompressionLevel,
     allocator: Allocator,
+    total_input: u64 = 0,
+    options: AdvancedOptions = .{},
 
     pub fn init(allocator: Allocator, level: config.CompressionLevel) StreamingCompressor {
         return .{
             .buffer = .empty,
             .level = level,
             .allocator = allocator,
+            .options = .{ .level = level },
+        };
+    }
+
+    pub fn initWithOptions(allocator: Allocator, options: AdvancedOptions) StreamingCompressor {
+        return .{
+            .buffer = .empty,
+            .level = options.level,
+            .allocator = allocator,
+            .options = options,
         };
     }
 
@@ -248,16 +561,27 @@ pub const StreamingCompressor = struct {
 
     pub fn write(self: *StreamingCompressor, data: []const u8) CompressionError!void {
         self.buffer.appendSlice(self.allocator, data) catch return CompressionError.OutOfMemory;
+        self.total_input += data.len;
     }
 
     pub fn finish(self: *StreamingCompressor) CompressionError![]u8 {
-        return compressAdvanced(self.buffer.items, self.allocator, self.level);
+        return compressWithOptions(self.buffer.items, self.allocator, self.options);
+    }
+
+    pub fn reset(self: *StreamingCompressor) void {
+        self.buffer.clearRetainingCapacity();
+        self.total_input = 0;
+    }
+
+    pub fn getTotalInput(self: *const StreamingCompressor) u64 {
+        return self.total_input;
     }
 };
 
 /// Streaming decompressor for incremental decompression
 pub const StreamingDecompressor = struct {
     allocator: Allocator,
+    total_output: u64 = 0,
 
     pub fn init(allocator: Allocator) StreamingDecompressor {
         return .{ .allocator = allocator };
@@ -268,7 +592,13 @@ pub const StreamingDecompressor = struct {
     }
 
     pub fn decompress_data(self: *StreamingDecompressor, data: []const u8) CompressionError![]u8 {
-        return decompress(data, self.allocator);
+        const result = try decompress(data, self.allocator);
+        self.total_output += result.len;
+        return result;
+    }
+
+    pub fn getTotalOutput(self: *const StreamingDecompressor) u64 {
+        return self.total_output;
     }
 };
 
@@ -278,7 +608,32 @@ pub fn getStats(original: []const u8, compressed: []const u8, level: config.Comp
         .original_size = original.len,
         .compressed_size = compressed.len,
         .level = level,
+        .content_type = ContentType.detect(original),
     };
+}
+
+/// Get detailed compression statistics with content analysis
+pub fn getDetailedStats(original: []const u8, compressed: []const u8, level: config.CompressionLevel) CompressionStats {
+    var stats = getStats(original, compressed, level);
+
+    // Analyze compression patterns
+    if (original.len > 0) {
+        var i: usize = 0;
+        while (i < original.len) {
+            const byte = original[i];
+            // Count RLE-like runs
+            var run_len: usize = 1;
+            while (i + run_len < original.len and original[i + run_len] == byte) {
+                run_len += 1;
+            }
+            if (run_len >= 4) {
+                stats.rle_runs += 1;
+            }
+            i += run_len;
+        }
+    }
+
+    return stats;
 }
 
 /// Calculate maximum possible compressed size
@@ -293,21 +648,85 @@ pub fn estimateRatio(data: []const u8) f32 {
     // Count unique bytes as a simple entropy estimate
     var seen: [256]bool = .{false} ** 256;
     var unique: usize = 0;
+    var byte_freq: [256]u32 = .{0} ** 256;
+
     for (data) |byte| {
+        byte_freq[byte] += 1;
         if (!seen[byte]) {
             seen[byte] = true;
             unique += 1;
         }
     }
 
-    // Higher unique count = higher entropy = worse compression
-    const entropy_ratio = @as(f32, @floatFromInt(unique)) / 256.0;
-    return 0.1 + entropy_ratio * 0.9; // Range: 0.1 to 1.0
+    // Calculate Shannon entropy
+    var entropy: f32 = 0.0;
+    const n: f32 = @floatFromInt(data.len);
+    for (byte_freq) |freq| {
+        if (freq > 0) {
+            const p: f32 = @as(f32, @floatFromInt(freq)) / n;
+            entropy -= p * @log2(p);
+        }
+    }
+
+    // Normalize entropy (max is 8 for 256 symbols)
+    const normalized_entropy = entropy / 8.0;
+
+    // Higher entropy = worse compression
+    return 0.1 + normalized_entropy * 0.9; // Range: 0.1 to 1.0
 }
 
-// ============================================================================
-// Tests
-// ============================================================================
+/// Analyze data compressibility
+pub const CompressibilityAnalysis = struct {
+    estimated_ratio: f32,
+    content_type: ContentType,
+    recommended_level: config.CompressionLevel,
+    is_already_compressed: bool,
+    has_repetitive_patterns: bool,
+
+    pub fn format(self: CompressibilityAnalysis) []const u8 {
+        if (self.is_already_compressed) return "Already compressed - use store mode";
+        if (self.has_repetitive_patterns) return "Highly compressible - use best level";
+        if (self.estimated_ratio < 0.3) return "Very compressible";
+        if (self.estimated_ratio < 0.6) return "Moderately compressible";
+        if (self.estimated_ratio < 0.8) return "Slightly compressible";
+        return "Low compressibility";
+    }
+};
+
+/// Analyze data for compressibility
+pub fn analyzeCompressibility(data: []const u8) CompressibilityAnalysis {
+    const content_type = ContentType.detect(data);
+    const estimated_ratio = estimateRatio(data);
+
+    // Check for repetitive patterns
+    var has_repetitive: bool = false;
+    if (data.len >= 64) {
+        var i: usize = 0;
+        var long_runs: usize = 0;
+        while (i < data.len) {
+            var run_len: usize = 1;
+            while (i + run_len < data.len and data[i + run_len] == data[i]) {
+                run_len += 1;
+            }
+            if (run_len >= 8) long_runs += 1;
+            i += run_len;
+        }
+        has_repetitive = long_runs > data.len / 256;
+    }
+
+    const is_compressed = switch (content_type) {
+        .archive, .image, .audio, .video => true,
+        else => false,
+    };
+
+    return .{
+        .estimated_ratio = estimated_ratio,
+        .content_type = content_type,
+        .recommended_level = if (is_compressed) .none else content_type.recommendedLevel(),
+        .is_already_compressed = is_compressed,
+        .has_repetitive_patterns = has_repetitive,
+    };
+}
 
 test "empty" {
     const allocator = std.testing.allocator;

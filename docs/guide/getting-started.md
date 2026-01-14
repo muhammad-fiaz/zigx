@@ -4,7 +4,7 @@ Get started with ZIGX in your Zig project.
 
 ## Requirements
 
-- Zig 0.14.0 or later (0.15.x recommended)
+- Zig 0.15.0 or later (0.15.x recommended)
 - A Zig project with `build.zig`
 
 ## Installation
@@ -73,6 +73,52 @@ try zigx.unbundle(.{
     .output_dir = "extracted",
     .allocator = allocator,
 });
+```
+
+## Progress Tracking
+
+Track progress for large archives:
+
+```zig
+fn onProgress(info: zigx.ProgressInfo, ctx: ?*anyopaque) void {
+    _ = ctx;
+    switch (info.event) {
+        .reading_file => {
+            if (info.current_file) |file| {
+                std.debug.print("\r[{d}/{d}] {s}", .{
+                    info.files_processed, info.total_files, file,
+                });
+            }
+        },
+        .compressing => {
+            std.debug.print("\rCompressing: {d:.1}%", .{info.getPercent()});
+        },
+        else => {},
+    }
+}
+
+var result = try zigx.bundle(.{
+    .allocator = allocator,
+    .include = &.{"src"},
+    .output_path = "bundle.zigx",
+    .progress_callback = onProgress,
+});
+```
+
+## Custom Compression Levels
+
+Use any zstd level from 1-22:
+
+```zig
+// Named levels
+.level = .fast,     // zstd 1
+.level = .default,  // zstd 3
+.level = .balanced, // zstd 6
+.level = .best,     // zstd 19
+.level = .ultra,    // zstd 22
+
+// Custom levels (1-22)
+.level = zigx.CompressionLevel.custom(15),
 ```
 
 ## Get Archive Info
