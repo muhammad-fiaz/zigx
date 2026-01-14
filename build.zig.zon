@@ -5,8 +5,8 @@
     .fingerprint = 0x16a26b25af4f5bbe,
     .dependencies = .{
         .zstd = .{
-            .url = "git+https://github.com/muhammad-fiaz/zstd.zig.git#e457ba6f12d81ea5323278acbee69d50302472bc",
-            .hash = "zstd-1.6.0-biH4jD5yMgBDkaotWjT5fE95b-hBOJXfKWPGtEKYZy_N",
+            .url = "git+https://github.com/muhammad-fiaz/zstd.zig.git#918ee9d38aca1e75a07a7cde1f9ff80d0acb2839",
+            .hash = "zstd-1.6.0-biH4jEeJMgCzNWKLVuljak847bwgE9p7AaPebhBgF5L2",
         },
     },
     .paths = .{
