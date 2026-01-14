@@ -2,17 +2,6 @@
 
 All notable changes to ZIGX are documented in this file.
 
-## [Unreleased]
-
-### Added
-- **Metadata Management**: API and CLI commands (`get`, `set`, `delete`, `get-all`) for managing archive metadata without full decompression.
-- **Signing Support**: `setSignature` API and `sign` CLI command.
-- **Improved CLI**: New `metadata` and `sign` commands in example CLI.
-- **Efficiency**: Optimized file operations using shared utilities.
-
-### Changed
-- **Compression**: Refactored internal configuration to strict Zstd levels (1-22).
-
 ## [0.0.1] - Initial Release
 
 ### Added
