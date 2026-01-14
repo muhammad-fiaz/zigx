@@ -49,16 +49,21 @@ Fast and light-weight compression file format for Zig using **Zstandard (zstd)**
 
 ## Installation
 
-Add to `build.zig.zon`:
 
-```zig
-.dependencies = .{
-    .zigx = .{
-        .url = "https://github.com/muhammad-fiaz/zigx/archive/refs/tags/v0.0.1.tar.gz",
-        .hash = "...", // Run: zig fetch <url>
-    },
-},
+Install the latest stable release (v0.0.1):
+
+```bash
+zig fetch --save https://github.com/muhammad-fiaz/zigx/archive/refs/tags/v0.0.1.tar.gz
 ```
+
+### Nightly Installation
+
+Install the latest development version:
+
+```bash
+zig fetch --save git+https://github.com/muhammad-fiaz/zigx
+```
+
 
 Then in `build.zig`:
 
