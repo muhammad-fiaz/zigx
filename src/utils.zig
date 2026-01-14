@@ -315,7 +315,6 @@ pub fn getDirname(path: []const u8) []const u8 {
     return std.fs.path.dirname(path) orelse "";
 }
 
-
 /// Check if a path matches any exclude pattern
 pub fn matchesPattern(path: []const u8, patterns: []const []const u8) bool {
     for (patterns) |pattern| {
@@ -423,7 +422,6 @@ pub fn matchesAnyGlob(path: []const u8, patterns: []const []const u8) bool {
     return false;
 }
 
-
 /// Calculate CRC32 checksum
 pub fn crc32(data: []const u8) u32 {
     const poly: u32 = 0xEDB88320;
@@ -459,7 +457,6 @@ pub const Crc32Hasher = struct {
         self.crc = 0xFFFFFFFF;
     }
 };
-
 
 /// Progress callback function type
 pub const ProgressCallback = *const fn (current: u64, total: u64, context: ?*anyopaque) void;
@@ -515,7 +512,6 @@ pub const ProgressTracker = struct {
     }
 };
 
-
 /// Get version display string
 pub fn getVersionString() []const u8 {
     return VERSION;
@@ -540,7 +536,6 @@ pub fn getFullVersionInfo(buf: []u8) []const u8 {
     }) catch VERSION;
 }
 
-
 /// Common error result type
 pub fn Result(comptime T: type) type {
     return union(enum) {
@@ -563,7 +558,6 @@ pub fn Result(comptime T: type) type {
         }
     };
 }
-
 
 test "format_size" {
     const size1 = formatSize(1024);
