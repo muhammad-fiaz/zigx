@@ -472,8 +472,8 @@ fn calculateStats(results: []const BenchmarkResult) struct {
 
 /// Write fully dynamic Markdown report
 fn writeMarkdownReport(results: []const BenchmarkResult, allocator: std.mem.Allocator) !void {
-    const file = std.fs.cwd().createFile("docs/benchmark-results.md", .{}) catch {
-        std.debug.print("Warning: Could not create docs/benchmark-results.md\n", .{});
+    const file = std.fs.cwd().createFile("benchmark-results.md", .{}) catch {
+        std.debug.print("Warning: Could not create benchmark-results.md\n", .{});
         return;
     };
     defer file.close();
@@ -963,6 +963,6 @@ pub fn main() !void {
     std.debug.print("     Best Space Saved: {d:.1}% ({s})\n", .{ stats.best_ratio, stats.best_ratio_name });
     std.debug.print("     Avg Bundle Speed: {d:.1} MB/s (higher = faster)\n", .{stats.avg_bundle_speed});
     std.debug.print("     Avg Unbundle Speed: {d:.1} MB/s (higher = faster)\n", .{stats.avg_unbundle_speed});
-    std.debug.print("     Results written to: docs/benchmark-results.md\n", .{});
+    std.debug.print("     Results written to: benchmark-results.md\n", .{});
     std.debug.print("\n", .{});
 }
